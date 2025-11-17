@@ -76,6 +76,11 @@ def edit_page():
     return render_template("edit.html")
 
 
+@app.route("/mobile-edit")
+def mobile_edit_page():
+    return render_template("mobile_edit.html")
+
+
 @app.route("/report")
 def report_page():
     return render_template("report.html")

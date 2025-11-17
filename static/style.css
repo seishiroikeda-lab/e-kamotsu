@@ -843,3 +843,230 @@ tbody tr:hover {
     border-radius: 12px;
   }
 }
+/* ===== スマホ用 現場モード専用スタイル ===== */
+
+.mobile-body {
+  background: #0f172a;
+  padding: 10px;
+}
+
+.mobile-app .card.mobile-card-root {
+  padding: 14px 12px;
+  border-radius: 18px;
+  box-shadow:
+    0 18px 45px rgba(15, 23, 42, 0.9),
+    0 0 0 1px rgba(148, 163, 184, 0.4);
+}
+
+.mobile-section {
+  margin-top: 10px;
+  padding: 10px 10px 8px;
+  border-radius: 12px;
+  background: #0b1120;
+  border: 1px solid #1e293b;
+  color: #e5e7eb;
+}
+
+.mobile-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  margin-bottom: 6px;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mobile-section-title::before {
+  content: "";
+  width: 3px;
+  height: 14px;
+  border-radius: 999px;
+  background: #38bdf8;
+}
+
+.mobile-row {
+  margin-bottom: 6px;
+}
+
+.mobile-row-inline {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.mobile-col {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-bottom: 2px;
+}
+
+.mobile-input,
+.mobile-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #1f2937;
+  background: #020617;
+  color: #e5e7eb;
+  font-size: 14px;
+  outline: none;
+}
+
+.mobile-input::placeholder {
+  color: #6b7280;
+}
+
+.mobile-textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+
+.mobile-input:focus,
+.mobile-textarea:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.6);
+}
+
+.mobile-input-readonly {
+  background: #020617;
+  color: #9ca3af;
+}
+
+.mobile-row-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mobile-help {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+.mobile-help ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.mobile-help-note {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.mobile-badge {
+  font-size: 10px;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.mobile-row-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mobile-row-card {
+  border-radius: 10px;
+  background: #020617;
+  border: 1px solid #1f2937;
+  padding: 8px 8px 6px;
+}
+
+.mobile-row-card-header {
+  margin-bottom: 4px;
+}
+
+.mobile-row-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e5e7eb;
+}
+
+.mobile-row-card-sub {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.mobile-row-card-body {
+  font-size: 11px;
+  color: #d1d5db;
+  margin-top: 4px;
+}
+
+.mobile-row-card-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.mobile-row-card-line span {
+  color: #9ca3af;
+}
+
+.mobile-row-card-line strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-row-card-footer {
+  margin-top: 4px;
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.mobile-empty {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.mobile-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.mobile-summary-item {
+  flex: 1;
+  min-width: 120px;
+}
+
+.mobile-summary-label {
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.mobile-summary-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e5e7eb;
+  font-variant-numeric: tabular-nums;
+}
+
+/* モバイルではボタンを少し大きめに */
+@media (max-width: 768px) {
+  .btn-primary,
+  .btn-secondary {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
