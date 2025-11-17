@@ -8,35 +8,31 @@
 </head>
 <body>
   <div class="app">
-    <div class="card">
-      <div class="app-header">
-        <div>
-          <div class="app-title">
-            搬入管理メニュー
-            <span class="app-title-badge">入口</span>
-          </div>
-          <div class="app-subtitle">
-            日々の搬入情報を「搬入番号」単位で管理するツールです。
-          </div>
+    <header class="app-header">
+      <div>
+        <div class="app-title">搬入管理システム</div>
+        <div class="app-subtitle">
+          搬入番号ごとの貨物情報を一元管理します。
         </div>
       </div>
+    </header>
 
-      <ol class="menu-steps">
-        <li><strong>新しく搬入があるとき：</strong>「搬入データ入力 / 編集」から登録</li>
-        <li><strong>過去の搬入を探すとき：</strong>「搬入データ検索」から検索</li>
-        <li><strong>紙で欲しいとき：</strong>「搬入票 印刷」から印刷</li>
-      </ol>
-
+    <main class="card card-large">
+      <div class="card-title">メニュー</div>
       <div class="menu-grid">
         <a class="menu-card" href="{{ url_for('edit_page') }}">
-          <div class="menu-icon">📦</div>
+          <div class="menu-icon">⌨️</div>
           <div class="menu-card-title">搬入データ入力 / 編集</div>
           <div class="menu-card-body">
-            <ul>
-              <li>搬入番号ごとに基本情報と明細を入力</li>
-              <li>M3・総重量は自動計算</li>
-              <li>未保存のまま閉じようとすると注意表示</li>
-            </ul>
+            デスクトップ向けの入力画面です。複数明細を一覧しながら編集します。
+          </div>
+        </a>
+
+        <a class="menu-card" href="{{ url_for('mobile_edit_page') }}">
+          <div class="menu-icon">📱</div>
+          <div class="menu-card-title">スマホ用 現場入力モード</div>
+          <div class="menu-card-body">
+            現場で長さ・重量を測りながら、スマホで1件ずつ入力するモードです。
           </div>
         </a>
 
@@ -44,40 +40,19 @@
           <div class="menu-icon">🔍</div>
           <div class="menu-card-title">搬入データ検索</div>
           <div class="menu-card-body">
-            <ul>
-              <li>搬入番号・荷主・仕向け地などで検索</li>
-              <li>結果から編集 / 印刷へジャンプ</li>
-              <li>条件なし検索で最近100件表示</li>
-            </ul>
+            搬入番号・荷主・仕向け地・品名などで登録済みデータを検索します。
           </div>
         </a>
 
         <a class="menu-card" href="{{ url_for('report_page') }}">
           <div class="menu-icon">📝</div>
-          <div class="menu-card-title">搬入票 印刷</div>
+          <div class="menu-card-title">搬入票（印刷用）</div>
           <div class="menu-card-body">
-            <ul>
-              <li>搬入番号を指定して搬入票を表示</li>
-              <li>A4縦の印刷レイアウト対応</li>
-              <li>総数・総重量・合計M3付き</li>
-            </ul>
+            搬入番号を指定して、印刷用の搬入票を表示・印刷できます。
           </div>
         </a>
-         <a class="menu-card" href="{{ url_for('mobile_edit_page') }}">
-          <div class="menu-icon">📱</div>
-          <div class="menu-card-title">スマホ用 現場入力モード</div>
-          <div class="menu-card-body">
-           <ul>
-            <li>スマホ前提の縦長レイアウト</li>
-            <li>1明細ずつカード形式で入力</li>
-            <li>長さ・重さを測りながら、その場で登録</li>
-           </ul>
-         </div>
-        </a>
-
-        
       </div>
-    </div>
+    </main>
   </div>
 </body>
 </html>
