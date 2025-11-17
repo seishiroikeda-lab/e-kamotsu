@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>搬入データ入力 / 編集</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app">
+    <div class="top-nav">
+      <a href="{{ url_for('index') }}">メニュー</a>
+      <span>›</span>
+      <span>搬入データ入力 / 編集</span>
+    </div>
+
+    <div class="card">
+      <div class="app-header">
+        <div>
+          <div class="app-title">
+            搬入データ入力 / 編集
+            <span class="app-title-badge">高速入力モード</span>
+          </div>
+          <div class="app-subtitle">
+            搬入番号ごとに、基本情報と明細を入力・編集する画面です。
+          </div>
+          <div id="editingInfo" class="editing-info">
+            搬入番号未選択
+          </div>
+        </div>
+        <button id="toggleHelpBtn" class="btn-secondary btn-small">
+          ？ 入力ヘルプ
+        </button>
+      </div>
+
+      <!-- 入力ヘルプ（必要なときだけ開く） -->
+      <div id="helpPanel" class="mini-help-box" style="display:none; margin-top:4px;">
+        <strong>入力のポイント</strong>
+        <ul>
+          <li><strong>搬入番号：</strong> 入力して Tab で移動するか Enter を押すと自動で読み込みます。（新規番号なら空の状態）</li>
+          <li><strong>№開始 / №終了：</strong> 1 と 10 を入れると個数 10 が自動計算されます。</li>
+          <li><strong>片方だけ番号：</strong> №開始か№終了のどちらかだけ数字なら個数=1として扱います。</li>
+          <li><strong>M3：</strong> 個数 × L × W × H × 0.000001（小数第4位四捨五入）で自動計算されます。</li>
+          <li><strong>行追加：</strong> 一番下の行に何か入力すると、自動で次の空行が追加されます。</li>
+        </ul>
+      </div>
+
+      <!-- 搬入番号 -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <label for="hainyuId">搬入番号</label>
+          <input type="text" id="hainyuId" placeholder="例：2025-00123（新規 / 既存どちらもOK）" />
+          <button class="btn-secondary" id="loadBtn">
+            読込 / 新規開始
+          </button>
+        </div>
+      </div>
+
+      <!-- 基本情報 -->
+      <div class="section">
+        <div class="section-title">基本情報</div>
+        <div class="field-grid">
+          <div class="field">
+            <label for="dateInput">搬入年月日</label>
+            <input type="date" id="dateInput" />
+          </div>
+          <div class="field">
+            <label for="shipperInput">荷主</label>
+            <input type="text" id="shipperInput" placeholder="例：○○商事株式会社" />
+          </div>
+          <div class="field">
+            <label for="destInput">仕向け地</label>
+            <input type="text" id="destInput" placeholder="例：SINGAPORE / HARBOR A" />
+          </div>
+          <div class="field">
+            <label for="itemNameInput">品名</label>
+            <input type="text" id="itemNameInput" placeholder="例：機械部品 / 衣類 / 食品 等" />
+          </div>
+        </div>
+        <div class="field" style="margin-top:8px;">
+          <label for="markInput">マーク（荷印）</label>
+          <textarea id="markInput" placeholder="例：&#10;ABC / TOKYO&#10;LOT NO.1234&#10;MADE IN JAPAN"></textarea>
+        </div>
+      </div>
+
+      <!-- 明細 -->
+      <div class="section">
+        <div class="section-title">明細</div>
+
+        <table id="itemsTable">
+          <thead>
+            <tr>
+              <th style="width: 26px;">#</th>
+              <th class="text-left">荷姿</th>
+              <th>№開始</th>
+              <th>№終了</th>
+              <th>個数</th>
+              <th>L (cm)</th>
+              <th>W (cm)</th>
+              <th>H (cm)</th>
+              <th>重量 (kg/1個)</th>
+              <th>M3</th>
+              <th style="width: 60px;">削除</th>
+            </tr>
+          </thead>
+          <tbody id="itemsBody"></tbody>
+        </table>
+
+        <div class="footer-bar">
+          <div class="footer-left">
+            <button class="btn-secondary" id="addRowBtn">明細行を追加</button>
+            <button class="btn-primary" id="saveBtn" disabled>この搬入番号で保存する</button>
+          </div>
+          <div class="totals">
+            <div>
+              <div class="totals-label">総 M3</div>
+              <div class="totals-value">
+                <span id="totalM3">0.000</span><span>m³</span>
+              </div>
+            </div>
+            <div>
+              <div class="totals-label">総重量</div>
+              <div class="totals-value">
+                <span id="totalWeight">0.0</span><span>kg</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="status" id="statusMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ==== 状態管理 ====
+    let currentHainyuId = null;
+    let isDirty = false;
+
+    function todayString() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function setStatus(message, type = "") {
+      const el = document.getElementById("statusMsg");
+      el.textContent = message || "";
+      el.classList.remove("ok", "warn");
+      if (type) el.classList.add(type);
+    }
+
+    function updateEditingIndicator() {
+      const el = document.getElementById("editingInfo");
+      if (!currentHainyuId) {
+        el.textContent = "搬入番号未選択";
+        el.className = "editing-info";
+        return;
+      }
+      if (isDirty) {
+        el.textContent = `編集中: ${currentHainyuId}（未保存の変更あり）`;
+        el.className = "editing-info editing-info-dirty";
+      } else {
+        el.textContent = `編集中: ${currentHainyuId}（保存済）`;
+        el.className = "editing-info editing-info-saved";
+      }
+    }
+
+    function markDirty() {
+      if (!isDirty) {
+        isDirty = true;
+        updateEditingIndicator();
+      }
+    }
+
+    function calcM3(qty, L, W, H) {
+      const q = Number(qty) || 0;
+      const l = Number(L) || 0;
+      const w = Number(W) || 0;
+      const h = Number(H) || 0;
+      const raw = q * l * w * h * 0.000001;
+      return Math.round(raw * 1000) / 1000;
+    }
+
+    async function apiLoadRecord(hainyuId) {
+      const res = await fetch(`/api/hainyu/${encodeURIComponent(hainyuId)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("サーバーエラー");
+      return await res.json();
+    }
+
+    async function apiSaveRecord(hainyuId, record) {
+      const res = await fetch(`/api/hainyu/${encodeURIComponent(hainyuId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(record),
+      });
+      if (!res.ok) throw new Error("保存に失敗しました");
+      return await res.json();
+    }
+
+    function updateTotals() {
+      const tbody = document.getElementById("itemsBody");
+      let totalM3 = 0;
+      let totalWeight = 0;
+
+      Array.from(tbody.children).forEach((tr) => {
+        const qtyInput = tr.querySelector(".qty-input");
+        const weightInput = tr.querySelector(".weight-input");
+        const m3Input = tr.querySelector(".m3-input");
+
+        const m3Val = Number(m3Input.value);
+        if (!isNaN(m3Val) && m3Input.value !== "") {
+          totalM3 += m3Val;
+        }
+
+        const qty = Number(qtyInput.value) || 0;
+        const w = Number(weightInput.value) || 0;
+        totalWeight += qty * w;
+      });
+
+      document.getElementById("totalM3").textContent = totalM3.toFixed(3);
+      document.getElementById("totalWeight").textContent = totalWeight.toFixed(1);
+    }
+
+    function renumberRows() {
+      const tbody = document.getElementById("itemsBody");
+      Array.from(tbody.children).forEach((tr, idx) => {
+        tr.children[0].textContent = idx + 1;
+      });
+    }
+
+    function rowHasAnyValue(tr) {
+      return Array.from(tr.querySelectorAll("input")).some(
+        (inp) => inp.value !== ""
+      );
+    }
+
+    function ensureBlankLastRow() {
+      const tbody = document.getElementById("itemsBody");
+      const rows = tbody.children;
+      if (rows.length === 0) {
+        addRow();
+        return;
+      }
+      const last = rows[rows.length - 1];
+      if (rowHasAnyValue(last)) {
+        addRow();
+      }
+    }
+
+    function addRow(item = {}) {
+      const tbody = document.getElementById("itemsBody");
+      const rowIndex = tbody.children.length + 1;
+
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${rowIndex}</td>
+        <td class="text-left">
+          <input type="text" class="cell-input pkg-input" placeholder="例：段ボール箱 / パレット 等" value="${item.packageType || ""}">
+        </td>
+        <td>
+          <input type="number" min="1" step="1" class="cell-input cell-input--small no-from-input" value="${item.noFrom ?? ""}">
+        </td>
+        <td>
+          <input type="number" min="1" step="1" class="cell-input cell-input--small no-to-input" value="${item.noTo ?? ""}">
+        </td>
+        <td>
+          <input type="number" min="0" step="1" class="cell-input cell-input--qty qty-input" value="${item.qty ?? ""}">
+        </td>
+        <td>
+          <input type="number" min="0" step="0.1" class="cell-input cell-input--small len-input" value="${item.L ?? ""}">
+        </td>
+        <td>
+          <input type="number" min="0" step="0.1" class="cell-input cell-input--small wid-input" value="${item.W ?? ""}">
+        </td>
+        <td>
+          <input type="number" min="0" step="0.1" class="cell-input cell-input--small hei-input" value="${item.H ?? ""}">
+        </td>
+        <td>
+          <input type="number" min="0" step="0.1" class="cell-input cell-input--small weight-input" value="${item.weightKg ?? ""}">
+        </td>
+        <td>
+          <input type="number" readonly class="cell-input cell-input--small m3-input" value="">
+        </td>
+        <td>
+          <button class="btn-danger delete-row-btn">削除</button>
+        </td>
+      `;
+
+      tbody.appendChild(tr);
+
+      const qtyInput = tr.querySelector(".qty-input");
+      const noFromInput = tr.querySelector(".no-from-input");
+      const noToInput = tr.querySelector(".no-to-input");
+      const lenInput = tr.querySelector(".len-input");
+      const widInput = tr.querySelector(".wid-input");
+      const heiInput = tr.querySelector(".hei-input");
+      const weightInput = tr.querySelector(".weight-input");
+      const m3Input = tr.querySelector(".m3-input");
+      const deleteBtn = tr.querySelector(".delete-row-btn");
+
+      // DB から読み込んだ時はその値を表示
+      if (item.m3 != null && item.m3 !== "") {
+        m3Input.value = Number(item.m3).toFixed(3);
+      }
+
+      function updateQtyFromNos() {
+        const from = parseInt(noFromInput.value, 10);
+        const to = parseInt(noToInput.value, 10);
+
+        let q = qtyInput.value ? Number(qtyInput.value) : 0;
+
+        if (!isNaN(from) && !isNaN(to)) {
+          if (to >= from) {
+            q = to - from + 1;
+          } else {
+            q = 0;
+          }
+        } else if (!isNaN(from) || !isNaN(to)) {
+          q = 1;
+        } else {
+          return;
+        }
+        qtyInput.value = q || "";
+      }
+
+      function updateRowM3AndTotals() {
+        const qv = qtyInput.value;
+        const lv = lenInput.value;
+        const wv = widInput.value;
+        const hv = heiInput.value;
+
+        if (qv === "" && lv === "" && wv === "" && hv === "") {
+          m3Input.value = "";
+        } else {
+          const m3 = calcM3(qv, lv, wv, hv);
+          m3Input.value = m3.toFixed(3);
+        }
+        updateTotals();
+        ensureBlankLastRow();
+      }
+
+      qtyInput.addEventListener("input", () => {
+        markDirty();
+        updateRowM3AndTotals();
+      });
+      noFromInput.addEventListener("input", () => {
+        markDirty();
+        updateQtyFromNos();
+        updateRowM3AndTotals();
+      });
+      noToInput.addEventListener("input", () => {
+        markDirty();
+        updateQtyFromNos();
+        updateRowM3AndTotals();
+      });
+      lenInput.addEventListener("input", () => {
+        markDirty();
+        updateRowM3AndTotals();
+      });
+      widInput.addEventListener("input", () => {
+        markDirty();
+        updateRowM3AndTotals();
+      });
+      heiInput.addEventListener("input", () => {
+        markDirty();
+        updateRowM3AndTotals();
+      });
+      weightInput.addEventListener("input", () => {
+        markDirty();
+        updateTotals();
+        ensureBlankLastRow();
+      });
+
+      deleteBtn.addEventListener("click", () => {
+        markDirty();
+        tr.remove();
+        renumberRows();
+        updateTotals();
+        ensureBlankLastRow();
+      });
+    }
+
+    function collectCurrentRecord() {
+      const dateInput = document.getElementById("dateInput");
+      const shipperInput = document.getElementById("shipperInput");
+      const destInput = document.getElementById("destInput");
+      const itemNameInput = document.getElementById("itemNameInput");
+      const markInput = document.getElementById("markInput");
+      const tbody = document.getElementById("itemsBody");
+
+      const items = [];
+      Array.from(tbody.children).forEach((tr) => {
+        const pkg = tr.querySelector(".pkg-input").value.trim();
+        const qty = tr.querySelector(".qty-input").value;
+        const noFrom = tr.querySelector(".no-from-input").value;
+        const noTo = tr.querySelector(".no-to-input").value;
+        const L = tr.querySelector(".len-input").value;
+        const W = tr.querySelector(".wid-input").value;
+        const H = tr.querySelector(".hei-input").value;
+        const weight = tr.querySelector(".weight-input").value;
+        const m3 = tr.querySelector(".m3-input").value;
+
+        // まったく何も入っていない行は無視
+        if (!pkg && !qty && !noFrom && !noTo && !L && !W && !H && !weight) return;
+
+        items.push({
+          packageType: pkg,
+          qty: qty !== "" ? Number(qty) : null,
+          noFrom: noFrom !== "" ? Number(noFrom) : null,
+          noTo: noTo !== "" ? Number(noTo) : null,
+          L: L !== "" ? Number(L) : null,
+          W: W !== "" ? Number(W) : null,
+          H: H !== "" ? Number(H) : null,
+          weightKg: weight !== "" ? Number(weight) : null,
+          m3: m3 !== "" ? Number(m3) : 0,
+        });
+      });
+
+      const header = {
+        date: dateInput.value || null,
+        shipper: shipperInput.value.trim() || "",
+        dest: destInput.value.trim() || "",
+        itemName: itemNameInput.value.trim() || "",
+        mark: markInput.value,
+      };
+
+      return { header, items };
+    }
+
+    function renderHeader(header) {
+      const dateInput = document.getElementById("dateInput");
+      const shipperInput = document.getElementById("shipperInput");
+      const destInput = document.getElementById("destInput");
+      const itemNameInput = document.getElementById("itemNameInput");
+      const markInput = document.getElementById("markInput");
+
+      if (header) {
+        dateInput.value = header.date || todayString();
+        shipperInput.value = header.shipper || "";
+        destInput.value = header.dest || "";
+        itemNameInput.value = header.itemName || "";
+        markInput.value = header.mark || "";
+      } else {
+        dateInput.value = todayString();
+        shipperInput.value = "";
+        destInput.value = "";
+        itemNameInput.value = "";
+        markInput.value = "";
+      }
+    }
+
+    function renderItems(items) {
+      const tbody = document.getElementById("itemsBody");
+      tbody.innerHTML = "";
+      if (!items || items.length === 0) {
+        addRow();
+      } else {
+        items.forEach((item) => addRow(item));
+      }
+      updateTotals();
+      ensureBlankLastRow();
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const loadBtn = document.getElementById("loadBtn");
+      const saveBtn = document.getElementById("saveBtn");
+      const addRowBtn = document.getElementById("addRowBtn");
+      const hainyuInput = document.getElementById("hainyuId");
+      const dateInput = document.getElementById("dateInput");
+      const toggleHelpBtn = document.getElementById("toggleHelpBtn");
+      const helpPanel = document.getElementById("helpPanel");
+
+      const shipperInput = document.getElementById("shipperInput");
+      const destInput = document.getElementById("destInput");
+      const itemNameInput = document.getElementById("itemNameInput");
+      const markInput = document.getElementById("markInput");
+
+      dateInput.value = todayString();
+      renderHeader(null);
+      renderItems([]);
+      updateEditingIndicator();
+
+      // ヘルプ開閉
+      toggleHelpBtn.addEventListener("click", () => {
+        const visible = helpPanel.style.display !== "none";
+        helpPanel.style.display = visible ? "none" : "block";
+        toggleHelpBtn.textContent = visible ? "？ 入力ヘルプ" : "× ヘルプを閉じる";
+      });
+
+      // ヘッダーフィールド変更で dirty
+      [dateInput, shipperInput, destInput, itemNameInput, markInput].forEach(
+        (el) => {
+          el.addEventListener("input", markDirty);
+        }
+      );
+
+      async function doLoad(id) {
+        if (!id) {
+          setStatus("まず搬入番号を入力してください。", "warn");
+          return;
+        }
+        setStatus("読み込み中です...", "");
+        try {
+          const record = await apiLoadRecord(id);
+          if (record) {
+            renderHeader(record.header || null);
+            renderItems(record.items || []);
+            setStatus(`搬入番号「${id}」のデータを読み込みました。`, "ok");
+          } else {
+            renderHeader(null);
+            renderItems([]);
+            setStatus(
+              `搬入番号「${id}」のデータはありません。新規入力として保存できます。`,
+              "ok"
+            );
+          }
+          currentHainyuId = id;
+          isDirty = false;
+          updateEditingIndicator();
+          saveBtn.disabled = false;
+        } catch (e) {
+          console.error(e);
+          setStatus("データ読込中にエラーが発生しました。", "warn");
+        }
+      }
+
+      loadBtn.addEventListener("click", () => {
+        const id = hainyuInput.value.trim();
+        doLoad(id);
+      });
+
+      // 搬入番号：Enter で読込
+      hainyuInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          const id = hainyuInput.value.trim();
+          doLoad(id);
+        }
+      });
+
+      // 搬入番号：フォーカスが抜けた時（change）で自動読込
+      hainyuInput.addEventListener("change", () => {
+        const id = hainyuInput.value.trim();
+        if (!id) return;
+        if (currentHainyuId === id && isDirty) return;
+        doLoad(id);
+      });
+
+      saveBtn.addEventListener("click", async () => {
+        const id = hainyuInput.value.trim();
+        if (!id) {
+          setStatus("搬入番号を入力してください。", "warn");
+          return;
+        }
+
+        const { header, items } = collectCurrentRecord();
+        if (!header.date) header.date = todayString();
+        if (!items || items.length === 0) {
+          setStatus("保存する明細がありません。1行以上入力してください。", "warn");
+          return;
+        }
+
+        setStatus("保存中です...", "");
+        try {
+          await apiSaveRecord(id, { header, items });
+          currentHainyuId = id;
+          isDirty = false;
+          updateEditingIndicator();
+          setStatus(`搬入番号「${id}」のデータを保存しました。`, "ok");
+        } catch (e) {
+          console.error(e);
+          setStatus("保存中にエラーが発生しました。", "warn");
+        }
+      });
+
+      addRowBtn.addEventListener("click", () => {
+        addRow();
+        ensureBlankLastRow();
+        markDirty();
+      });
+
+      // /edit?id=XXXX で来たとき自動読込
+      const params = new URLSearchParams(window.location.search);
+      const initialId = params.get("id");
+      if (initialId) {
+        hainyuInput.value = initialId;
+        doLoad(initialId);
+      }
+
+      // 未保存のまま離脱しようとしたときブラウザ警告
+      window.addEventListener("beforeunload", (e) => {
+        if (!isDirty) return;
+        e.preventDefault();
+        e.returnValue = "";
+      });
+    });
+  </script>
+</body>
+</html>

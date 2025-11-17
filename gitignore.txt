@@ -1,0 +1,17 @@
+# Python キャッシュ類
+__pycache__/
+*.py[cod]
+
+# 仮想環境（作った場合）
+venv/
+.env/
+
+# 編集用の設定ファイルなど
+*.log
+
+# SQLite データベース（本番でも自動生成させる）
+*.db
+
+# OSやエディタが作る余計なファイル
+.DS_Store
+Thumbs.db

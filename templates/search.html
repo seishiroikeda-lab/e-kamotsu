@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>搬入データ検索</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app">
+    <div class="top-nav">
+      <a href="{{ url_for('index') }}">メニュー</a>
+      <span>›</span>
+      <span>搬入データ検索</span>
+    </div>
+
+    <div class="card">
+      <div class="app-header">
+        <div>
+          <div class="app-title">
+            搬入データ検索
+            <span class="app-title-badge">探して → 編集・印刷へ</span>
+          </div>
+          <div class="app-subtitle">
+            搬入番号・荷主・仕向け地・品名・マークのキーワードで検索できます。<br />
+            <strong>結果の行の右側ボタンから、そのまま編集画面や搬入票印刷画面へ移動できます。</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="search-bar">
+        <input
+          type="text"
+          id="searchQuery"
+          placeholder="例：搬入番号（2025-00123）/ 荷主（山田商事）/ 仕向け地（SINGAPORE）などを入力"
+        />
+        <button class="btn-primary" id="searchBtn">検索する</button>
+        <button class="btn-secondary" id="clearBtn">条件クリア</button>
+      </div>
+      <div class="search-hint">
+        ・何も入力せずに「検索する」を押すと、<strong>最近登録した順に最大100件</strong>が表示されます。
+      </div>
+
+      <div class="search-result-panel">
+        <div class="search-result-header">
+          <span id="resultCount">検索結果 0件</span>
+        </div>
+
+        <table class="search-table">
+          <thead>
+            <tr>
+              <th>搬入番号</th>
+              <th>搬入年月日</th>
+              <th>荷主</th>
+              <th>仕向け地</th>
+              <th>品名</th>
+              <th>最終更新</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <tr><td colspan="7" class="td-center">検索条件を入力して「検索する」を押してください。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function apiSearch(q) {
+      const url = q ? `/api/search?q=${encodeURIComponent(q)}` : "/api/search";
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("検索エラー");
+      return await res.json();
+    }
+
+    function renderResults(data) {
+      const tbody = document.getElementById("resultsBody");
+      const resultCount = document.getElementById("resultCount");
+      const results = data.results || [];
+
+      resultCount.textContent = `検索結果 ${results.length}件`;
+
+      if (results.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="td-center">該当するデータがありませんでした。</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = "";
+      results.forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.hainyuId || ""}</td>
+          <td>${r.date || ""}</td>
+          <td>${r.shipper || ""}</td>
+          <td>${r.dest || ""}</td>
+          <td>${r.itemName || ""}</td>
+          <td>${r.lastUpdated || ""}</td>
+          <td>
+            <button class="btn-secondary btn-small" data-action="edit">編集</button>
+            <button class="btn-primary btn-small" data-action="report">搬入票</button>
+          </td>
+        `;
+        tr.querySelectorAll("button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const action = btn.getAttribute("data-action");
+            if (action === "edit") {
+              window.location.href = `/edit?id=${encodeURIComponent(r.hainyuId)}`;
+            } else if (action === "report") {
+              window.location.href = `/report?id=${encodeURIComponent(r.hainyuId)}`;
+            }
+          });
+        });
+        tbody.appendChild(tr);
+      });
+    }
+
+    window.addEventListener("DOMContentLoaded", async () => {
+      const searchInput = document.getElementById("searchQuery");
+      const searchBtn = document.getElementById("searchBtn");
+      const clearBtn = document.getElementById("clearBtn");
+
+      async function performSearch() {
+        const q = searchInput.value.trim();
+        try {
+          const data = await apiSearch(q);
+          renderResults(data);
+        } catch (e) {
+          console.error(e);
+          alert("検索中にエラーが発生しました。");
+        }
+      }
+
+      searchBtn.addEventListener("click", performSearch);
+      clearBtn.addEventListener("click", () => {
+        searchInput.value = "";
+        performSearch();
+      });
+
+      // Enterキーで検索
+      searchInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") performSearch();
+      });
+
+      // 初回は最近100件表示
+      performSearch();
+    });
+  </script>
+</body>
+</html>

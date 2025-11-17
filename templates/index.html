@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>搬入管理メニュー</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app">
+    <div class="card">
+      <div class="app-header">
+        <div>
+          <div class="app-title">
+            搬入管理メニュー
+            <span class="app-title-badge">入口</span>
+          </div>
+          <div class="app-subtitle">
+            日々の搬入情報を「搬入番号」単位で管理するツールです。
+          </div>
+        </div>
+      </div>
+
+      <ol class="menu-steps">
+        <li><strong>新しく搬入があるとき：</strong>「搬入データ入力 / 編集」から登録</li>
+        <li><strong>過去の搬入を探すとき：</strong>「搬入データ検索」から検索</li>
+        <li><strong>紙で欲しいとき：</strong>「搬入票 印刷」から印刷</li>
+      </ol>
+
+      <div class="menu-grid">
+        <a class="menu-card" href="{{ url_for('edit_page') }}">
+          <div class="menu-icon">📦</div>
+          <div class="menu-card-title">搬入データ入力 / 編集</div>
+          <div class="menu-card-body">
+            <ul>
+              <li>搬入番号ごとに基本情報と明細を入力</li>
+              <li>M3・総重量は自動計算</li>
+              <li>未保存のまま閉じようとすると注意表示</li>
+            </ul>
+          </div>
+        </a>
+
+        <a class="menu-card" href="{{ url_for('search_page') }}">
+          <div class="menu-icon">🔍</div>
+          <div class="menu-card-title">搬入データ検索</div>
+          <div class="menu-card-body">
+            <ul>
+              <li>搬入番号・荷主・仕向け地などで検索</li>
+              <li>結果から編集 / 印刷へジャンプ</li>
+              <li>条件なし検索で最近100件表示</li>
+            </ul>
+          </div>
+        </a>
+
+        <a class="menu-card" href="{{ url_for('report_page') }}">
+          <div class="menu-icon">📝</div>
+          <div class="menu-card-title">搬入票 印刷</div>
+          <div class="menu-card-body">
+            <ul>
+              <li>搬入番号を指定して搬入票を表示</li>
+              <li>A4縦の印刷レイアウト対応</li>
+              <li>総数・総重量・合計M3付き</li>
+            </ul>
+          </div>
+        </a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

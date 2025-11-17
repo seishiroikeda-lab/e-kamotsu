@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>搬入票 / 搬入報告書</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="app report-app">
+    <div class="top-nav no-print">
+      <a href="{{ url_for('index') }}">メニュー</a>
+      <span>›</span>
+      <span>搬入票 / 搬入報告書</span>
+    </div>
+
+    <div class="card report-card">
+      <div class="report-toolbar no-print">
+        <div class="toolbar-left">
+          <label for="reportHainyuId">搬入番号</label>
+          <input type="text" id="reportHainyuId" placeholder="例：2025-00123（印刷したい搬入番号）" />
+          <button class="btn-secondary" id="reportLoadBtn">読込</button>
+        </div>
+        <button class="btn-primary" id="printBtn">印刷</button>
+      </div>
+
+      <div class="report-help no-print">
+        ① 印刷したい搬入番号を入力して「読込」 → ② 内容を確認 → ③ 「印刷」ボタンからA4縦で印刷してください。
+      </div>
+
+      <div id="reportArea" class="report-area">
+        <div class="report-placeholder">
+          搬入番号を指定して「読込」を押すと搬入票が表示されます。
+        </div>
+      </div>
+
+      <div class="status no-print" id="reportStatus"></div>
+    </div>
+  </div>
+
+  <script>
+    function escapeHtml(str) {
+      if (str == null) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function formatNumber(value, digits) {
+      if (value == null || isNaN(value)) return "";
+      return Number(value).toFixed(digits);
+    }
+
+    function setReportStatus(msg, type = "") {
+      const el = document.getElementById("reportStatus");
+      el.textContent = msg || "";
+      el.classList.remove("ok", "warn");
+      if (type) el.classList.add(type);
+    }
+
+    async function apiLoadRecord(hainyuId) {
+      const res = await fetch(`/api/hainyu/${encodeURIComponent(hainyuId)}`);
+      if (res.status === 404) return null;
+      if (!res.ok) throw new Error("サーバーエラー");
+      return await res.json();
+    }
+
+    function renderReport(hainyuId, record) {
+      const area = document.getElementById("reportArea");
+      const header = record.header || {};
+      const items = record.items || [];
+
+      let totalM3 = 0;
+      let totalWeight = 0;
+      let totalQty = 0;
+
+      items.forEach((it) => {
+        const m3 = Number(it.m3) || 0;
+        const qty = Number(it.qty) || 0;
+        const w = Number(it.weightKg) || 0;
+        totalM3 += m3;
+        totalWeight += qty * w;
+        totalQty += qty;
+      });
+
+      let rowsHtml = "";
+      items.forEach((it, idx) => {
+        const qty = it.qty;
+        const w = it.weightKg;
+        const lineWeight = (Number(qty) || 0) * (Number(w) || 0);
+
+        rowsHtml += `
+          <tr>
+            <td class="td-center">${idx + 1}</td>
+            <td class="td-left">${escapeHtml(it.packageType || "")}</td>
+            <td class="td-right">${qty != null ? qty : ""}</td>
+            <td class="td-center">${it.noFrom != null ? it.noFrom : ""}</td>
+            <td class="td-center">${it.noTo != null ? it.noTo : ""}</td>
+            <td class="td-right">${it.L != null ? it.L : ""}</td>
+            <td class="td-right">${it.W != null ? it.W : ""}</td>
+            <td class="td-right">${it.H != null ? it.H : ""}</td>
+            <td class="td-right">${formatNumber(w, 1)}</td>
+            <td class="td-right">${formatNumber(lineWeight, 1)}</td>
+            <td class="td-right">${formatNumber(it.m3, 3)}</td>
+          </tr>
+        `;
+      });
+
+      area.innerHTML = `
+        <div class="report-paper">
+          <!-- ヘッダー部 -->
+          <header class="report-header-block">
+            <div class="report-title-row">
+              <div class="report-main-title">搬&nbsp;入&nbsp;票</div>
+              <div class="report-meta-block">
+                <div class="report-meta-line">
+                  <span class="report-meta-label">搬入番号</span>
+                  <span class="report-meta-value">${escapeHtml(hainyuId)}</span>
+                </div>
+              </div>
+            </div>
+
+            <table class="report-info-table">
+              <tr>
+                <th>搬入年月日</th>
+                <td>${escapeHtml(header.date || "")}</td>
+                <th>荷主</th>
+                <td>${escapeHtml(header.shipper || "")}</td>
+              </tr>
+              <tr>
+                <th>仕向け地</th>
+                <td>${escapeHtml(header.dest || "")}</td>
+                <th>品名</th>
+                <td>${escapeHtml(header.itemName || "")}</td>
+              </tr>
+            </table>
+
+            <div class="report-mark-block">
+              <div class="report-section-label">マーク</div>
+              <pre class="report-mark-pre">${escapeHtml(header.mark || "")}</pre>
+            </div>
+          </header>
+
+          <!-- 明細テーブル -->
+          <main>
+            <table class="report-items-table">
+              <thead>
+                <tr>
+                  <th style="width: 26px;">#</th>
+                  <th>荷姿</th>
+                  <th>個数</th>
+                  <th>№開始</th>
+                  <th>№終了</th>
+                  <th>L (cm)</th>
+                  <th>W (cm)</th>
+                  <th>H (cm)</th>
+                  <th>重量 (kg/1個)</th>
+                  <th>総重量 (kg)</th>
+                  <th>M3</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  rowsHtml ||
+                  `<tr><td colspan="11" class="td-center">明細が登録されていません。</td></tr>`
+                }
+              </tbody>
+            </table>
+          </main>
+
+          <!-- 合計・サマリー -->
+          <footer class="report-summary">
+            <div class="report-summary-box">
+              <div class="summary-item">
+                <span class="summary-label">総個数</span>
+                <span class="summary-value">${totalQty}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">総重量</span>
+                <span class="summary-value">${formatNumber(totalWeight, 1)} kg</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">合計 M3</span>
+                <span class="summary-value">${formatNumber(totalM3, 3)} m³</span>
+              </div>
+            </div>
+          </footer>
+        </div>
+      `;
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      const reportHainyuIdInput = document.getElementById("reportHainyuId");
+      const reportLoadBtn = document.getElementById("reportLoadBtn");
+      const printBtn = document.getElementById("printBtn");
+
+      reportLoadBtn.addEventListener("click", async () => {
+        const id = reportHainyuIdInput.value.trim();
+        if (!id) {
+          setReportStatus("搬入番号を入力してください。", "warn");
+          return;
+        }
+        setReportStatus("読み込み中です...", "");
+        try {
+          const record = await apiLoadRecord(id);
+          if (!record) {
+            setReportStatus(`搬入番号「${id}」のデータが見つかりません。`, "warn");
+            return;
+          }
+          renderReport(id, record);
+          setReportStatus(`搬入番号「${id}」の搬入票を表示しました。`, "ok");
+        } catch (e) {
+          console.error(e);
+          setReportStatus("読込中にエラーが発生しました。", "warn");
+        }
+      });
+
+      printBtn.addEventListener("click", () => {
+        window.print();
+      });
+
+      // /report?id=XXXX で来たとき自動読込
+      const params = new URLSearchParams(window.location.search);
+      const initialId = params.get("id");
+      if (initialId) {
+        reportHainyuIdInput.value = initialId;
+        reportLoadBtn.click();
+      }
+    });
+  </script>
+</body>
+</html>
