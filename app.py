@@ -14,6 +14,7 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
+    # ヘッダー情報テーブル
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS hainyu_headers (
@@ -27,20 +28,21 @@ def init_db():
         """
     )
 
+    # 明細テーブル
     cur.execute(
         """
         CREATE TABLE IF NOT EXISTS hainyu_items (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            hainyu_id   TEXT,
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            hainyu_id    TEXT,
             package_type TEXT,
-            no_from     INTEGER,
-            no_to       INTEGER,
-            qty         INTEGER,
-            L           REAL,
-            W           REAL,
-            H           REAL,
-            weight_kg   REAL,
-            m3          REAL
+            no_from      INTEGER,
+            no_to        INTEGER,
+            qty          INTEGER,
+            L            REAL,
+            W            REAL,
+            H            REAL,
+            weight_kg    REAL,
+            m3           REAL
         )
         """
     )
@@ -49,10 +51,12 @@ def init_db():
     conn.close()
 
 
-init_db()  # モジュール読み込み時に一度だけ実行
+# モジュール読み込み時に一度だけ実行
+init_db()
 
 
 def get_db():
+    """毎回新しいコネクションを返す簡易版"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
@@ -92,8 +96,19 @@ def api_get_hainyu(hainyu_id):
     conn = get_db()
     cur = conn.cursor()
 
+    # ヘッダー
     cur.execute(
-        "SELECT hainyu_id, date, shipper, dest, item_name, mark FROM hainyu_headers WHERE hainyu_id = ?",
+        """
+        SELECT
+            hainyu_id,
+            date,
+            shipper,
+            dest,
+            item_name,
+            mark
+        FROM hainyu_headers
+        WHERE hainyu_id = ?
+        """,
         (hainyu_id,),
     )
     header_row = cur.fetchone()
@@ -102,6 +117,7 @@ def api_get_hainyu(hainyu_id):
         conn.close()
         return jsonify({"error": "not found"}), 404
 
+    # 明細
     cur.execute(
         """
         SELECT
@@ -171,22 +187,22 @@ def api_save_hainyu(hainyu_id):
     conn = get_db()
     cur = conn.cursor()
 
-    # header upsert
+    # ヘッダー upsert
     cur.execute(
         """
         INSERT INTO hainyu_headers (hainyu_id, date, shipper, dest, item_name, mark)
         VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(hainyu_id) DO UPDATE SET
-          date=excluded.date,
-          shipper=excluded.shipper,
-          dest=excluded.dest,
-          item_name=excluded.item_name,
-          mark=excluded.mark
+          date      = excluded.date,
+          shipper   = excluded.shipper,
+          dest      = excluded.dest,
+          item_name = excluded.item_name,
+          mark      = excluded.mark
         """,
         (hainyu_id, date, shipper, dest, item_name, mark),
     )
 
-    # 明細は一旦全部消してから挿入し直す
+    # 明細は一度削除してから挿入し直し
     cur.execute("DELETE FROM hainyu_items WHERE hainyu_id = ?", (hainyu_id,))
 
     for it in items:
@@ -227,30 +243,44 @@ def api_save_hainyu(hainyu_id):
 
 
 # ===== API: 検索 =====
+# search.html 側は { "results": [...] } という形式を期待しているので、
+# 必ず {"results": result} の形で返す。
 
 @app.route("/api/search", methods=["GET"])
 def api_search():
     q = request.args.get("q", "").strip()
-    if not q:
-        return jsonify([])
 
     conn = get_db()
     cur = conn.cursor()
-    like = f"%{q}%"
-    cur.execute(
-        """
-        SELECT hainyu_id, date, shipper, dest, item_name
+
+    base_sql = """
+        SELECT
+            hainyu_id,
+            date,
+            shipper,
+            dest,
+            item_name,
+            mark
         FROM hainyu_headers
-        WHERE
-            hainyu_id LIKE ?
-            OR shipper LIKE ?
-            OR dest LIKE ?
-            OR item_name LIKE ?
-        ORDER BY date DESC, hainyu_id ASC
-        LIMIT 100
-        """,
-        (like, like, like, like),
-    )
+    """
+    params = []
+
+    if q:
+        like = f"%{q}%"
+        base_sql += """
+            WHERE
+                hainyu_id LIKE ?
+                OR shipper LIKE ?
+                OR dest LIKE ?
+                OR item_name LIKE ?
+                OR mark LIKE ?
+        """
+        params.extend([like, like, like, like, like])
+
+    # q が空でも最近順で最大100件返す
+    base_sql += " ORDER BY date DESC, hainyu_id ASC LIMIT 100"
+
+    cur.execute(base_sql, params)
     rows = cur.fetchall()
     conn.close()
 
@@ -263,9 +293,12 @@ def api_search():
                 "shipper": r["shipper"],
                 "dest": r["dest"],
                 "itemName": r["item_name"],
+                # lastUpdated カラムはないので、とりあえず date を流用
+                "lastUpdated": r["date"],
             }
         )
-    return jsonify(result)
+
+    return jsonify({"results": result})
 
 
 if __name__ == "__main__":
