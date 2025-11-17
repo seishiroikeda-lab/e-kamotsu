@@ -5,7 +5,7 @@
   <title>スマホ用 搬入データ入力（現場）</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-  <!-- 画像から文字を読むためのブラウザ用OCRライブラリ -->
+  <!-- ブラウザ用 OCR ライブラリ -->
   <script src="https://unpkg.com/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
 </head>
 <body>
@@ -34,7 +34,7 @@
         </div>
       </div>
 
-      <!-- 搬入番号＋基本説明 -->
+      <!-- 搬入番号 -->
       <div class="section">
         <div class="section-title">搬入番号</div>
         <div class="field-grid">
@@ -61,7 +61,7 @@
           <ul style="margin:0; padding-left:18px;">
             <li>搬入番号を入力して <strong>Enter</strong> または「読込 / 新規開始」を押すと読み込みます。</li>
             <li>既存番号の場合は過去のデータが表示されます。初めての番号なら新規として入力できます。</li>
-            <li>読み込んだあとは、その搬入番号で明細を追加してから「この搬入番号で保存する」を押します。</li>
+            <li>明細を追加したあと「この搬入番号で保存する」を押して確定します。</li>
           </ul>
         </div>
       </div>
@@ -91,7 +91,7 @@
           </div>
         </div>
 
-        <!-- マーク + OCRボタン -->
+        <!-- マーク + OCR -->
         <div class="field" style="margin-top:8px;">
           <label for="markInput">
             マーク（荷印）
@@ -103,6 +103,7 @@
             id="markInput"
             placeholder="例：&#10;ABC / TOKYO&#10;LOT NO.1234&#10;MADE IN JAPAN"
           ></textarea>
+
           <!-- カメラ/画像選択用 input（隠し） -->
           <input
             type="file"
@@ -112,12 +113,12 @@
             style="display:none;"
           />
           <div class="field-hint">
-            📷 を押すとカメラ（または写真）を開き、撮影したラベルなどから文字を読み取ってマーク欄に反映します。
+            📷 を押してラベル等を撮影 → 必要な部分だけをトリミングして英数字だけを読み取ります。
           </div>
         </div>
       </div>
 
-      <!-- 明細入力（1件ぶん） -->
+      <!-- 明細入力 -->
       <div class="section">
         <div class="section-title">
           明細入力
@@ -224,8 +225,52 @@
     </div>
   </div>
 
+  <!-- 画像トリミング用オーバーレイ -->
+  <div
+    id="cropOverlay"
+    style="
+      display:none;
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,0.55);
+      z-index:9999;
+      align-items:center;
+      justify-content:center;
+      padding:10px;
+    "
+  >
+    <div
+      style="
+        background:#ffffff;
+        border-radius:12px;
+        max-width:600px;
+        width:100%;
+        padding:10px;
+        box-shadow:0 10px 30px rgba(0,0,0,0.45);
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+      "
+    >
+      <div style="font-size:13px; font-weight:600;">
+        読み取りたい範囲をドラッグして選択してください
+      </div>
+      <canvas
+        id="cropCanvas"
+        style="width:100%; max-height:60vh; border:1px solid #e5e7eb; touch-action:none; background:#000;"
+      ></canvas>
+      <div style="font-size:11px; color:#6b7280;">
+        画像上を指でドラッグして四角形の枠を描き、その範囲だけを英数字でOCRします。
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:4px;">
+        <button id="cropCancelBtn" class="btn-secondary btn-small">キャンセル</button>
+        <button id="cropOkBtn" class="btn-primary btn-small">この範囲で読み取る</button>
+      </div>
+    </div>
+  </div>
+
   <script>
-    // ===== ユーティリティ =====
+    // ===== 状態管理 =====
     let currentHainyuId = null;
     let isDirty = false;
     let items = [];
@@ -525,6 +570,144 @@
       };
     }
 
+    // ===== OCR 用トリミング UI =====
+    let cropOverlay, cropCanvas, cropCtx;
+    let cropImage = null;
+    let cropScale = 1;  // image.width * scale = canvas.width
+    let isDrawingCrop = false;
+    let cropStartX = 0;
+    let cropStartY = 0;
+    let cropCurrentX = 0;
+    let cropCurrentY = 0;
+    let cropRect = null; // {x,y,w,h} in canvas coords
+
+    function openCropper(dataUrl) {
+      cropOverlay = document.getElementById("cropOverlay");
+      cropCanvas = document.getElementById("cropCanvas");
+      cropCtx = cropCanvas.getContext("2d");
+
+      cropOverlay.style.display = "flex";
+      cropRect = null;
+
+      cropImage = new Image();
+      cropImage.onload = () => {
+        const maxCanvasWidth = Math.min(window.innerWidth - 60, 600);
+        const maxCanvasHeight = Math.min(window.innerHeight * 0.6, 400);
+        const scale = Math.min(
+          maxCanvasWidth / cropImage.width,
+          maxCanvasHeight / cropImage.height
+        );
+
+        const drawWidth = cropImage.width * scale;
+        const drawHeight = cropImage.height * scale;
+
+        cropCanvas.width = drawWidth;
+        cropCanvas.height = drawHeight;
+        cropScale = scale;
+
+        drawCropCanvas();
+      };
+      cropImage.src = dataUrl;
+    }
+
+    function drawCropCanvas() {
+      if (!cropCtx || !cropImage) return;
+      cropCtx.clearRect(0, 0, cropCanvas.width, cropCanvas.height);
+      cropCtx.drawImage(cropImage, 0, 0, cropCanvas.width, cropCanvas.height);
+
+      if (isDrawingCrop || cropRect) {
+        const x = isDrawingCrop ? Math.min(cropStartX, cropCurrentX) : cropRect.x;
+        const y = isDrawingCrop ? Math.min(cropStartY, cropCurrentY) : cropRect.y;
+        const w = isDrawingCrop
+          ? Math.abs(cropCurrentX - cropStartX)
+          : cropRect.w;
+        const h = isDrawingCrop
+          ? Math.abs(cropCurrentY - cropStartY)
+          : cropRect.h;
+
+        if (w > 0 && h > 0) {
+          cropCtx.save();
+          cropCtx.strokeStyle = "rgba(37, 99, 235, 1)";
+          cropCtx.lineWidth = 2;
+          cropCtx.strokeRect(x, y, w, h);
+          cropCtx.fillStyle = "rgba(37, 99, 235, 0.18)";
+          cropCtx.fillRect(x, y, w, h);
+          cropCtx.restore();
+        }
+      }
+    }
+
+    function pointerPosFromEvent(e, canvas) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const clientX = e.clientX ?? (e.touches && e.touches[0].clientX);
+      const clientY = e.clientY ?? (e.touches && e.touches[0].clientY);
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
+      };
+    }
+
+    async function runOcrOnCroppedCanvas() {
+      const markInput = document.getElementById("markInput");
+      if (!cropRect || !cropImage) {
+        setStatus("トリミング範囲が選択されていません。", "warn");
+        return;
+      }
+
+      // キャンバス座標 → 元画像座標へ変換
+      const sx = cropRect.x / cropScale;
+      const sy = cropRect.y / cropScale;
+      const sw = cropRect.w / cropScale;
+      const sh = cropRect.h / cropScale;
+
+      if (sw < 10 || sh < 10) {
+        setStatus("トリミング範囲が小さすぎます。もう一度選択してください。", "warn");
+        return;
+      }
+
+      const off = document.createElement("canvas");
+      off.width = sw;
+      off.height = sh;
+      const offCtx = off.getContext("2d");
+      offCtx.drawImage(cropImage, sx, sy, sw, sh, 0, 0, sw, sh);
+
+      try {
+        setStatus("画像から文字を読み取り中です…", "");
+        // 英数字と一部記号のみを対象に OCR
+        const result = await Tesseract.recognize(off, "eng", {
+          logger: (m) => console.log(m),
+          tessedit_char_whitelist:
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_/ .:",
+        });
+
+        let text = (result.data && result.data.text) ? result.data.text : "";
+        // 念のため、英数字と記号以外は削除（日本語などを落とす）
+        text = text.replace(/[^A-Za-z0-9\-_/ .:\n\r]/g, "");
+        text = text.trim();
+                // 小文字を含んでいてもすべて大文字に統一
+        text = text.toUpperCase();
+
+        if (!text) {
+          setStatus("英数字として読み取れる文字がありませんでした。", "warn");
+          return;
+        }
+
+        if (markInput.value) {
+          markInput.value = markInput.value.replace(/\s*$/, "") + "\n" + text;
+        } else {
+          markInput.value = text;
+        }
+
+        markDirty();
+        setStatus("トリミングした範囲から英数字のみを読み取りました。", "ok");
+      } catch (err) {
+        console.error(err);
+        setStatus("OCR中にエラーが発生しました。", "warn");
+      }
+    }
+
     // ===== 初期化 =====
     window.addEventListener("DOMContentLoaded", () => {
       const hainyuInput = document.getElementById("hainyuId");
@@ -540,6 +723,13 @@
       const markInput = document.getElementById("markInput");
       const markOcrBtn = document.getElementById("markOcrBtn");
       const markOcrFile = document.getElementById("markOcrFile");
+
+      // トリミング用要素
+      cropOverlay = document.getElementById("cropOverlay");
+      cropCanvas = document.getElementById("cropCanvas");
+      cropCtx = cropCanvas.getContext("2d");
+      const cropCancelBtn = document.getElementById("cropCancelBtn");
+      const cropOkBtn = document.getElementById("cropOkBtn");
 
       // 初期値
       dateInput.value = todayString();
@@ -563,44 +753,90 @@
         }
       );
 
-      // マーク用 OCR：ボタン → ファイル選択
+      // マーク用 OCR：ボタン → カメラ起動
       markOcrBtn.addEventListener("click", () => {
         markOcrFile.click();
       });
 
-      // マーク用 OCR：画像選択後に文字認識
-      markOcrFile.addEventListener("change", async (e) => {
+      // ファイル選択後：トリミング UI を開く
+      markOcrFile.addEventListener("change", (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
-        try {
-          setStatus("画像から文字を読み取り中です…", "");
-          const result = await Tesseract.recognize(file, "jpn+eng", {
-            logger: (m) => console.log(m),
-          });
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          openCropper(ev.target.result);
+        };
+        reader.readAsDataURL(file);
 
-          const text = (result.data && result.data.text) ? result.data.text.trim() : "";
-          if (!text) {
-            setStatus("画像から文字を読み取れませんでした。", "warn");
-            return;
-          }
-
-          if (markInput.value) {
-            markInput.value = markInput.value.replace(/\s*$/, "") + "\n" + text;
-          } else {
-            markInput.value = text;
-          }
-
-          markDirty();
-          setStatus("画像から読み取った文字をマークに反映しました。", "ok");
-        } catch (err) {
-          console.error(err);
-          setStatus("画像からの文字読み取り中にエラーが発生しました。", "warn");
-        } finally {
-          markOcrFile.value = "";
-        }
+        // 同じファイルを再度選べるようにリセット
+        markOcrFile.value = "";
       });
 
+      // トリミングキャンセル
+      cropCancelBtn.addEventListener("click", () => {
+        cropOverlay.style.display = "none";
+        cropImage = null;
+        cropRect = null;
+      });
+
+      // トリミング確定 → OCR
+      cropOkBtn.addEventListener("click", async () => {
+        cropOverlay.style.display = "none";
+        await runOcrOnCroppedCanvas();
+        cropImage = null;
+        cropRect = null;
+      });
+
+      // トリミング用キャンバスのドラッグ操作（pointer イベント）
+      cropCanvas.addEventListener("pointerdown", (e) => {
+        if (!cropCanvas) return;
+        e.preventDefault();
+        cropCanvas.setPointerCapture(e.pointerId);
+        const pos = pointerPosFromEvent(e, cropCanvas);
+        isDrawingCrop = true;
+        cropStartX = cropCurrentX = pos.x;
+        cropStartY = cropCurrentY = pos.y;
+        cropRect = null;
+        drawCropCanvas();
+      });
+
+      cropCanvas.addEventListener("pointermove", (e) => {
+        if (!isDrawingCrop) return;
+        const pos = pointerPosFromEvent(e, cropCanvas);
+        cropCurrentX = pos.x;
+        cropCurrentY = pos.y;
+        drawCropCanvas();
+      });
+
+      function finishCrop(e) {
+        if (!isDrawingCrop) return;
+        const pos = pointerPosFromEvent(e, cropCanvas);
+        cropCurrentX = pos.x;
+        cropCurrentY = pos.y;
+        isDrawingCrop = false;
+
+        const x = Math.min(cropStartX, cropCurrentX);
+        const y = Math.min(cropStartY, cropCurrentY);
+        const w = Math.abs(cropCurrentX - cropStartX);
+        const h = Math.abs(cropCurrentY - cropStartY);
+
+        if (w > 10 && h > 10) {
+          cropRect = { x, y, w, h };
+        } else {
+          cropRect = null;
+        }
+        drawCropCanvas();
+      }
+
+      cropCanvas.addEventListener("pointerup", finishCrop);
+      cropCanvas.addEventListener("pointercancel", finishCrop);
+      cropCanvas.addEventListener("pointerleave", (e) => {
+        // 画面外に出ても一旦確定させる
+        if (isDrawingCrop) finishCrop(e);
+      });
+
+      // 搬入データ読み込み
       async function doLoad(id) {
         if (!id) {
           setStatus("まず搬入番号を入力してください。", "warn");
@@ -648,7 +884,7 @@
         }
       });
 
-      // フォーカスアウトでも読込
+      // フォーカスアウトでも読込（別番号に変えた時）
       hainyuInput.addEventListener("change", () => {
         const id = hainyuInput.value.trim();
         if (!id) return;
@@ -656,7 +892,7 @@
         doLoad(id);
       });
 
-      // 明細フォームイベント
+      // 明細フォーム
       const pkgInput = document.getElementById("pkgInput");
       const noFromInput = document.getElementById("noFromInput");
       const noToInput = document.getElementById("noToInput");
@@ -741,7 +977,7 @@
         }
       });
 
-      // URLに ?id=XXXX があれば自動読込
+      // URL に ?id=XXXX があれば自動読込
       const params = new URLSearchParams(window.location.search);
       const initialId = params.get("id");
       if (initialId) {
@@ -749,7 +985,7 @@
         doLoad(initialId);
       }
 
-      // 未保存でページ離脱する時の警告
+      // 未保存で離脱する時の警告
       window.addEventListener("beforeunload", (e) => {
         if (!isDirty) return;
         e.preventDefault();
