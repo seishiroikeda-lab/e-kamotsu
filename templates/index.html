@@ -9,7 +9,6 @@
 <body>
   <div class="app">
 
-    <!-- パンくず -->
     <div class="top-nav">
       <span>E-貨物</span>
       <span>›</span>
@@ -31,61 +30,65 @@
       </div>
 
       <ul class="menu-steps">
-        <li>① 現場または事務所で <strong>搬入データ入力 / 編集</strong> からデータを登録します。</li>
+        <li>① 現場または事務所で <strong>搬入データ入力</strong> からデータを登録します。</li>
         <li>② 必要に応じて <strong>搬入票印刷</strong> で搬入票を印刷します。</li>
-        <li>③ 過去データの検索は <strong>搬入データ検索</strong>、日次・月次の確認は <strong>搬入一覧 / 集計</strong> を使います。</li>
+        <li>③ 過去データの検索は <strong>検索</strong>、日次・月次の確認は <strong>一覧 / 集計</strong> を使います。</li>
       </ul>
 
       <div class="menu-grid">
 
-        <!-- 搬入データ入力 / 編集 -->
         <a href="{{ url_for('edit_page') }}" class="menu-card">
           <div class="menu-icon">📝</div>
-          <div class="menu-card-title">搬入データ入力 / 編集</div>
+          <div class="menu-card-title">搬入データ入力 / 編集 (PC)</div>
           <div class="menu-card-body">
-            搬入番号を指定してヘッダー情報（搬入日・荷主・仕向け地・品名・マーク）と、
-            明細（荷姿・№・個数・LWH・重量）を入力 / 修正します。<br />
-            M3 や合計重量は自動計算されます。
+            搬入番号を指定してヘッダー情報と明細を入力・修正します。<br />
+            マウスとキーボードでの高速入力に適した画面です。
           </div>
         </a>
 
-        <!-- スマホ向け 現場入力 -->
         <a href="{{ url_for('mobile_edit_page') }}" class="menu-card">
           <div class="menu-icon">📱</div>
-          <div class="menu-card-title">スマホ現場入力モード</div>
+          <div class="menu-card-title">スマホ現場入力 (標準)</div>
           <div class="menu-card-body">
             現場（ヤード・倉庫など）でスマホから入力するための画面です。<br />
-            片手操作やタブ移動を前提に、撮影したマークのOCR読み取りにも対応します。
+            OCR機能などを搭載しています。
           </div>
         </a>
 
-        <!-- 搬入票印刷 -->
+        <a href="{{ url_for('test_mobile_page') }}" class="menu-card" style="border: 2px solid #f59e0b; background: #fffbeb;">
+          <div class="menu-icon">🧪</div>
+          <div class="menu-card-title" style="color: #b45309;">スマホ現場入力 (改善テスト)</div>
+          <div class="menu-card-body" style="color: #92400e;">
+            <span style="background:#f59e0b; color:white; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:bold;">NEW</span>
+            <br>
+            固定フッター、入力ゾーン化、荷姿チップなどを搭載した<strong>新UIのテストページ</strong>です。
+          </div>
+        </a>
+
         <a href="{{ url_for('report_page') }}" class="menu-card">
           <div class="menu-icon">🧾</div>
           <div class="menu-card-title">搬入票印刷</div>
           <div class="menu-card-body">
-            搬入番号を指定して搬入票レイアウトを表示し、そのまま A4 で印刷できます。<br />
-            荷主やマーク、明細行、合計値を見やすく整形して出力します。
+            搬入番号を指定して搬入票レイアウトを表示し、A4で印刷できます。<br />
+            明細行や合計値を見やすく整形して出力します。
           </div>
         </a>
 
-        <!-- 搬入データ検索 -->
         <a href="{{ url_for('search_page') }}" class="menu-card">
           <div class="menu-icon">🔍</div>
           <div class="menu-card-title">搬入データ検索</div>
           <div class="menu-card-body">
             搬入番号・荷主・仕向け地・品名・マークのキーワードで検索できます。<br />
-            検索結果から、そのまま編集画面や搬入票印刷画面にジャンプ可能です。
+            検索結果から編集・印刷へ移動できます。
           </div>
         </a>
 
-        <!-- 搬入一覧 / 集計 -->
         <a href="{{ url_for('list_page') }}" class="menu-card">
           <div class="menu-icon">📊</div>
           <div class="menu-card-title">搬入一覧 / 集計</div>
           <div class="menu-card-body">
-            日付・荷主・仕向け地で絞り込んで、搬入番号ごとの合計個数・合計 M3・合計重量を一覧表示します。<br />
-            日次・月次の確認や請求・見積もりの元データ確認に使えます。
+            日付・荷主・仕向け地で絞り込み、合計個数・M3・重量を確認します。<br />
+            日次・月次の確認や請求業務に使えます。
           </div>
         </a>
 
