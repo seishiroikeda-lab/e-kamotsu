@@ -1,11 +1,16 @@
 import os
 import sqlite3
+import time
 from flask import Flask, render_template, request, jsonify
 
 app = Flask(__name__)
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, "hainyu.db")
+
+# マーク画像保存先ディレクトリ
+MARK_DIR = os.path.join(BASE_DIR, "static", "mark_images")
+os.makedirs(MARK_DIR, exist_ok=True)
 
 
 # ===== DB 初期化 =====
@@ -47,6 +52,12 @@ def init_db():
         """
     )
 
+    # 既存DBに mark_image カラムが無ければ追加
+    cur.execute("PRAGMA table_info(hainyu_headers)")
+    cols = [row[1] for row in cur.fetchall()]
+    if "mark_image" not in cols:
+        cur.execute("ALTER TABLE hainyu_headers ADD COLUMN mark_image TEXT")
+
     conn.commit()
     conn.close()
 
@@ -76,13 +87,13 @@ def edit_page():
 
 @app.route("/mobile-edit")
 def mobile_edit_page():
-    """従来のスマホ入力画面"""
+    """スマホ入力画面"""
     return render_template("mobile_edit.html")
 
 
 @app.route("/test-mobile")
 def test_mobile_page():
-    """★ 追加: 新しいスマホ入力UIテスト画面"""
+    """新しいスマホ入力UIテスト画面（使わなければ無視でOK）"""
     return render_template("testmobile.html")
 
 
@@ -117,7 +128,8 @@ def api_get_hainyu(hainyu_id):
             shipper,
             dest,
             item_name,
-            mark
+            mark,
+            mark_image
         FROM hainyu_headers
         WHERE hainyu_id = ?
         """,
@@ -159,6 +171,7 @@ def api_get_hainyu(hainyu_id):
         "dest": header_row["dest"],
         "itemName": header_row["item_name"],
         "mark": header_row["mark"],
+        "markImage": header_row["mark_image"],  # ★ 画像パス
     }
 
     items = []
@@ -199,7 +212,7 @@ def api_save_hainyu(hainyu_id):
     conn = get_db()
     cur = conn.cursor()
 
-    # ヘッダー upsert
+    # ヘッダー upsert（mark_image はここでは触らない）
     cur.execute(
         """
         INSERT INTO hainyu_headers (hainyu_id, date, shipper, dest, item_name, mark)
@@ -252,6 +265,60 @@ def api_save_hainyu(hainyu_id):
     conn.close()
 
     return jsonify({"status": "ok"})
+
+
+# ===== API: OCR 用マーク画像アップロード =====
+# ・mobile_edit.html / edit.html から呼び出される
+# ・元画像を static/mark_images/ に保存
+# ・hainyu_headers.mark_image にパスを保存
+
+@app.route("/api/hainyu/<hainyu_id>/mark_image", methods=["POST"])
+def api_upload_mark_image(hainyu_id):
+    if "file" not in request.files:
+        return jsonify({"error": "no file"}), 400
+
+    f = request.files["file"]
+    if f.filename == "":
+        return jsonify({"error": "empty file"}), 400
+
+    # 拡張子決定
+    _, ext = os.path.splitext(f.filename)
+    ext = ext.lower() or ".jpg"
+    if ext not in [".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"]:
+        ext = ".jpg"
+
+    # ファイル名: 搬入番号_タイムスタンプ.ext
+    filename = f"{hainyu_id}_{int(time.time())}{ext}"
+
+    # static からの相対パスと実ファイルパス
+    rel_path = os.path.join("mark_images", filename).replace("\\", "/")
+    save_path = os.path.join(MARK_DIR, filename)
+
+    # 元画像のまま保存（リサイズしない）
+    f.save(save_path)
+
+    # DB にパスを保存（ヘッダーが無い場合は空ヘッダーを作る）
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO hainyu_headers (hainyu_id, date, shipper, dest, item_name, mark, mark_image)
+        VALUES (?, '', '', '', '', '', ?)
+        ON CONFLICT(hainyu_id) DO UPDATE SET
+          mark_image = excluded.mark_image
+        """,
+        (hainyu_id, rel_path),
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify(
+        {
+            "status": "ok",
+            "imagePath": rel_path,
+            "imageUrl": f"/static/{rel_path}",
+        }
+    )
 
 
 # ===== API: 検索（キーワード検索用） =====
@@ -328,6 +395,7 @@ def api_summary():
             h.shipper,
             h.dest,
             h.item_name,
+            h.mark_image,
             COUNT(i.id)                      AS item_count,
             COALESCE(SUM(i.qty), 0)          AS total_qty,
             COALESCE(SUM(i.m3), 0)           AS total_m3,
@@ -365,7 +433,8 @@ def api_summary():
             h.date,
             h.shipper,
             h.dest,
-            h.item_name
+            h.item_name,
+            h.mark_image
         ORDER BY
             h.date DESC,
             h.hainyu_id ASC
@@ -389,6 +458,7 @@ def api_summary():
                 "totalQty": r["total_qty"],
                 "totalM3": float(r["total_m3"] or 0),
                 "totalWeight": float(r["total_weight"] or 0),
+                "markImage": r["mark_image"],  # LIST側で使わなければ無視してOK
             }
         )
 
@@ -396,6 +466,4 @@ def api_summary():
 
 
 if __name__ == "__main__":
-    # 開発サーバー起動
-    # 外部公開する場合は host='0.0.0.0' にする等
     app.run(debug=True, port=5000)

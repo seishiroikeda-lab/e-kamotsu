@@ -6,15 +6,276 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="https://unpkg.com/tesseract.js@5.0.3/dist/tesseract.min.js"></script>
-</head>
-<body class="mobile-body">
 
-  <!-- 上部ステータスバー（トースト） -->
+  <style>
+    /* ===== 現場UX特化スタイル（スマホ専用ダークテーマ） ===== */
+    :root {
+      --bg-body: #0f172a;
+      --bg-card: #1e293b;
+      --bg-input: #334155;
+      --bg-focus: #172554; /* 入力中の背景 */
+      --accent: #38bdf8;
+      --text-main: #f1f5f9;
+      --text-sub: #94a3b8;
+      --border: #475569;
+    }
+
+    body {
+      background-color: var(--bg-body);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      padding-bottom: 140px;
+      -webkit-font-smoothing: antialiased;
+    }
+    
+    .mobile-app {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 0 12px;
+    }
+
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+    }
+    
+    .section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 2px solid var(--border);
+    }
+    .section-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-sub);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .input-label {
+      font-size: 11px;
+      color: var(--text-sub);
+      margin-bottom: 4px;
+      display: block;
+      font-weight: bold;
+    }
+    .mobile-input {
+      width: 100%;
+      font-size: 18px;
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: #fff;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .mobile-input:focus {
+      border-color: var(--accent);
+      background: var(--bg-focus);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.25);
+      transform: translateY(-1px);
+    }
+    
+    .row { display: flex; gap: 10px; }
+    .col { flex: 1; min-width: 0; }
+
+    .chip-scroll {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 4px 0 8px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+    }
+    .chip-scroll::-webkit-scrollbar { display: none; }
+    .chip {
+      flex: 0 0 auto;
+      background: #334155;
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      padding: 8px 16px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: transform 0.1s, background 0.2s;
+    }
+    .chip:active {
+      transform: scale(0.95);
+      background: var(--accent);
+      color: #0f172a;
+      border-color: var(--accent);
+    }
+
+    .dims-box {
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 12px;
+      margin-top: 8px;
+    }
+    .dims-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .m3-badge {
+      background: #172554;
+      border: 1px solid #1e40af;
+      color: #60a5fa;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: bold;
+      font-family: monospace;
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      border-top: 1px solid #334155;
+      padding: 12px 16px;
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+      display: flex;
+      gap: 10px;
+      z-index: 100;
+      box-shadow: 0 -5px 25px rgba(0,0,0,0.6);
+    }
+    .btn-action {
+      flex: 1;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      padding: 10px 0;
+      transition: transform 0.1s;
+      height: 56px;
+    }
+    .btn-action:active { transform: scale(0.96); }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+      flex: 2;
+      font-size: 17px;
+      box-shadow: 0 4px 15px rgba(37, 99, 235, 0.4);
+    }
+    .btn-sub { background: #334155; color: #cbd5e1; }
+    .btn-save { background: #16a34a; color: white; font-size: 11px; gap: 2px; }
+
+    .card-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+      border-left: 4px solid var(--accent);
+      position: relative;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #334155;
+      padding-bottom: 6px;
+    }
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-sub);
+    }
+    .card-val {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+      margin-top: 2px;
+    }
+    .card-edit-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: #334155;
+      border: 1px solid #475569;
+      color: #fff;
+      font-size: 11px;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+
+    .status-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 10px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: bold;
+      z-index: 200;
+      transform: translateY(-100%);
+      transition: transform 0.3s;
+    }
+    .status-bar.show { transform: translateY(0); }
+    .status-ok { background: #22c55e; color: #fff; }
+    .status-warn { background: #f59e0b; color: #000; }
+
+    /* マーク写真一覧 */
+    .mark-images-section {
+      margin-top: 10px;
+    }
+    .mark-images-scroll {
+      margin-top: 4px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      min-height: 80px;
+      align-items: center;
+    }
+    .mark-images-scroll::-webkit-scrollbar {
+      display: none;
+    }
+    .mark-thumb {
+      width: 80px;
+      height: 80px;
+      border-radius: 10px;
+      object-fit: cover;
+      border: 1px solid #475569;
+      flex: 0 0 auto;
+      background: #020617;
+    }
+    .mark-images-empty {
+      font-size: 12px;
+      color: #64748b;
+      padding: 8px 4px;
+    }
+  </style>
+</head>
+<body>
+
   <div id="statusBar" class="status-bar"></div>
 
-  <!-- 戻るリンク＋保存状態 -->
   <div style="padding: 12px; display:flex; justify-content:space-between; align-items:center;">
-    <a href="{{ url_for('index') }}" style="color:#38bdf8; text-decoration:none; font-size:14px; font-weight:bold;">
+    <a href="{{ url_for('index') }}" style="color:var(--accent); text-decoration:none; font-size:14px; font-weight:bold;">
       &lt; メニュー
     </a>
     <div id="headerStatus" style="font-size:12px; color:#64748b;">番号未選択</div>
@@ -22,34 +283,28 @@
 
   <div class="mobile-app">
 
-    <!-- 搬入番号 -->
     <div class="section">
       <div class="section-header">
         <div class="section-title">搬入番号</div>
       </div>
       <div class="row">
         <input type="text" id="hainyuId" class="mobile-input" placeholder="例: 2025-00123">
-        <button id="loadBtn"
-                class="mobile-input"
-                style="width:80px; background:#475569; border-color:#64748b; font-size:14px; font-weight:bold; text-align:center;">
+        <button id="loadBtn" class="mobile-input" style="width:80px; background:#475569; border-color:#64748b; font-size:14px; font-weight:bold;">
           読込
         </button>
       </div>
     </div>
 
-    <!-- 基本情報 -->
     <div class="section">
       <div class="section-header">
         <div class="section-title">基本情報</div>
       </div>
-
       <div class="row" style="margin-bottom:12px;">
         <div class="col">
           <span class="input-label">搬入日</span>
           <input type="date" id="dateInput" class="mobile-input">
         </div>
       </div>
-
       <div style="margin-bottom:12px;">
         <span class="input-label">荷主 / 仕向け地 / 品名</span>
         <div class="row" style="margin-bottom:8px;">
@@ -62,24 +317,29 @@
       <div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
           <span class="input-label">マーク</span>
-          <button type="button" id="markOcrBtn"
-                  style="background:none; border:none; color:#38bdf8; font-size:12px; padding:0;">
+          <button type="button" id="markOcrBtn" style="background:none; border:none; color:var(--accent); font-size:12px;">
             📷 カメラ読取
           </button>
           <input type="file" id="markOcrFile" accept="image/*" capture="environment" style="display:none;">
         </div>
         <textarea id="markInput" class="mobile-input" style="min-height:60px; font-family:monospace; font-size:14px;"></textarea>
       </div>
+
+      <!-- マーク写真一覧（常に枠は表示） -->
+      <div id="markImagesSection" class="mark-images-section">
+        <span class="input-label">マーク写真</span>
+        <div id="markImagesList" class="mark-images-scroll">
+          <div class="mark-images-empty">まだ写真がありません</div>
+        </div>
+      </div>
     </div>
 
-    <!-- 明細入力 -->
-    <div class="section" id="inputSection">
+    <div class="section" id="inputSection" style="border: 2px solid var(--border);">
       <div class="section-header">
         <div class="section-title">明細入力</div>
-        <div id="rowIndicator" style="font-size:11px; color:#38bdf8; font-weight:bold;">新規入力モード</div>
+        <div id="rowIndicator" style="font-size:11px; color:var(--accent); font-weight:bold;">新規入力モード</div>
       </div>
 
-      <!-- 荷姿 -->
       <div style="margin-bottom:12px;">
         <span class="input-label">荷姿</span>
         <div class="row" style="margin-bottom:8px;">
@@ -95,7 +355,6 @@
         </div>
       </div>
 
-      <!-- No. & 個数 -->
       <div class="row" style="margin-bottom:8px;">
         <div class="col">
           <span class="input-label">No.開始</span>
@@ -106,16 +365,15 @@
           <input type="number" id="noToInput" inputmode="numeric" class="mobile-input" placeholder="10">
         </div>
         <div class="col">
-          <span class="input-label" style="color:#38bdf8;">個数</span>
-          <input type="number" id="qtyInput" inputmode="numeric" class="mobile-input"
-                 style="border-color:#38bdf8; background:rgba(56,189,248,0.1); font-weight:bold;">
+          <span class="input-label" style="color:var(--accent);">個数</span>
+          <input type="number" id="qtyInput" inputmode="numeric" class="mobile-input" 
+                 style="border-color:var(--accent); background:rgba(56,189,248,0.1); font-weight:bold;">
         </div>
       </div>
 
-      <!-- 寸法・重量 -->
       <div class="dims-box">
         <div class="dims-header">
-          <span class="input-label" style="margin:0;">寸法 (cm) &amp; 重量</span>
+          <span class="input-label" style="margin:0;">寸法 (cm) & 重量</span>
           <div style="display:flex; align-items:center; gap:6px;">
             <span style="font-size:10px; color:#94a3b8;">M3:</span>
             <div id="m3Display" class="m3-badge">0.000</div>
@@ -136,13 +394,11 @@
       </div>
     </div>
 
-    <!-- 登録済み明細 -->
     <div class="section-title" style="margin: 0 4px 8px;">登録済み明細</div>
     <div id="rowsList" style="margin-bottom: 40px;"></div>
 
   </div>
 
-  <!-- 画面下の固定ボタン -->
   <div class="sticky-footer">
     <button id="stickyClearBtn" class="btn-action btn-sub">
       クリア
@@ -156,24 +412,18 @@
     </button>
   </div>
 
-  <!-- OCR用トリミングオーバーレイ -->
-  <div id="cropOverlay"
-       style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9999; align-items:center; justify-content:center; padding:16px;">
+  <div id="cropOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:9999; align-items:center; justify-content:center; padding:16px;">
     <div style="width:100%; max-width:500px; display:flex; flex-direction:column; gap:16px;">
       <div style="color:#fff; text-align:center;">範囲をドラッグして選択</div>
       <canvas id="cropCanvas" style="background:#000; width:100%; border:1px solid #475569; touch-action:none;"></canvas>
       <div class="row">
         <button id="cropCancelBtn" class="mobile-input" style="background:#334155;">キャンセル</button>
-        <button id="cropOkBtn" class="mobile-input"
-                style="background:#38bdf8; border-color:#38bdf8; color:#000; font-weight:bold;">
-          読取
-        </button>
+        <button id="cropOkBtn" class="mobile-input" style="background:var(--accent); border-color:var(--accent); color:#000; font-weight:bold;">読取</button>
       </div>
     </div>
   </div>
 
   <script>
-    // ===== バイブレーション =====
     function triggerHaptic(type = 'selection') {
       if (navigator.vibrate) {
         if (type === 'success') navigator.vibrate(50);
@@ -182,8 +432,7 @@
       }
     }
 
-    // ===== トースト表示 =====
-    function showToast(msg, type = 'ok') {
+    function showToast(msg, type='ok') {
       const bar = document.getElementById("statusBar");
       bar.textContent = msg;
       bar.className = "status-bar show " + (type === 'ok' ? 'status-ok' : 'status-warn');
@@ -192,15 +441,15 @@
       }, 2500);
     }
 
-    // ===== 状態管理 =====
     let currentHainyuId = null;
     let isDirty = false;
     let items = [];
     let currentIndex = null;
+    let markImages = [];  // マーク写真URL
 
     function todayString() {
       const d = new Date();
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     }
 
     function updateHeaderStatus() {
@@ -232,52 +481,84 @@
     }
 
     function calcM3(qty, L, W, H) {
-      const q = Number(qty) || 0;
-      const l = Number(L) || 0;
-      const w = Number(W) || 0;
-      const h = Number(H) || 0;
+      const q = Number(qty)||0; const l=Number(L)||0; const w=Number(W)||0; const h=Number(H)||0;
       return Math.round(q * l * w * h * 0.000001 * 1000) / 1000;
     }
 
-    // ===== API =====
+    function updateFooterForEdit(isEditing) {
+      const addBtn = document.getElementById("stickyAddBtn");
+      const saveBtn = document.getElementById("stickySaveBtn");
+      if (isEditing) {
+        addBtn.textContent = "編集中の明細を上書き保存";
+        saveBtn.style.display = "none";
+      } else {
+        addBtn.textContent = "＋ 追加";
+        saveBtn.style.display = "flex";
+      }
+    }
+
+    function setEditingVisual(isEditing) {
+      const section = document.getElementById("inputSection");
+      const indicator = document.getElementById("rowIndicator");
+      if (isEditing) {
+        section.style.borderColor = "#f97316";
+        section.style.boxShadow = "0 0 0 1px #f97316";
+        indicator.style.color = "#fed7aa";
+      } else {
+        section.style.borderColor = "#475569";
+        section.style.boxShadow = "none";
+        indicator.style.color = "#38bdf8";
+      }
+    }
+
+    // マーク写真描画（常に枠あり）
+    function renderMarkImages(list) {
+      const wrap = document.getElementById("markImagesList");
+      if (!wrap) return;
+
+      wrap.innerHTML = "";
+      if (!list || list.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "mark-images-empty";
+        empty.textContent = "まだ写真がありません";
+        wrap.appendChild(empty);
+        return;
+      }
+
+      list.forEach((url, idx) => {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "マーク写真" + (idx + 1);
+        img.className = "mark-thumb";
+        wrap.appendChild(img);
+      });
+    }
+
     async function apiLoadRecord(id) {
       const res = await fetch(`/api/hainyu/${encodeURIComponent(id)}`);
       if (res.status === 404) return null;
       if (!res.ok) throw new Error("load failed");
       return await res.json();
     }
-
     async function apiSaveRecord(id, record) {
       const res = await fetch(`/api/hainyu/${encodeURIComponent(id)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify(record)
       });
       if (!res.ok) throw new Error("save failed");
     }
 
-    // ===== 荷姿チップ =====
-    window.setPkg = function (val) {
+    window.setPkg = function(val) {
       const el = document.getElementById("pkgInput");
       el.value = val;
       markDirty();
       triggerHaptic('selection');
-    };
+    }
 
-    // ===== 行フォーム クリア（編集モード解除含む） =====
     function clearRowForm() {
       currentIndex = null;
-
-      const rowInd = document.getElementById("rowIndicator");
-      rowInd.textContent = "新規入力モード";
-      rowInd.classList.remove("editing-label");
-
-      const section = document.getElementById("inputSection");
-      section.classList.remove("editing-mode");
-
-      const addBtn = document.getElementById("stickyAddBtn");
-      addBtn.innerHTML = "＋ 追加";
-
+      document.getElementById("rowIndicator").textContent = "新規入力モード";
       document.getElementById("pkgInput").value = "";
       document.getElementById("noFromInput").value = "";
       document.getElementById("noToInput").value = "";
@@ -287,28 +568,20 @@
       document.getElementById("heiInput").value = "";
       document.getElementById("weightInput").value = "";
       document.getElementById("m3Display").textContent = "0.000";
-
-      // カード側のハイライトも消す
-      renderRowsList();
+      setEditingVisual(false);
+      updateFooterForEdit(false);
     }
 
-    // ===== 編集モードへ =====
-    window.fillRowForm = function (index) {
+    window.fillRowForm = function(index) {
       const it = items[index];
       if (!it) return;
       currentIndex = index;
+      
+      document.getElementById("rowIndicator").textContent = `No.${index+1} を編集中`;
+      setEditingVisual(true);
+      updateFooterForEdit(true);
 
-      const rowInd = document.getElementById("rowIndicator");
-      rowInd.textContent = `No.${index + 1} を編集中`;
-      rowInd.classList.add("editing-label");
-
-      const section = document.getElementById("inputSection");
-      section.classList.add("editing-mode");
-
-      const addBtn = document.getElementById("stickyAddBtn");
-      addBtn.innerHTML = "✔ 更新";
-
-      document.getElementById("pkgInput").value = it.packageType || "";
+      document.getElementById("pkgInput").value = it.packageType||"";
       document.getElementById("noFromInput").value = (it.noFrom ?? "");
       document.getElementById("noToInput").value = (it.noTo ?? "");
       document.getElementById("qtyInput").value = (it.qty ?? "");
@@ -318,17 +591,12 @@
       document.getElementById("weightInput").value = (it.weightKg ?? "");
       document.getElementById("m3Display").textContent = (it.m3 ?? 0).toFixed(3);
 
-      // 編集対象カードをハイライト
-      renderRowsList();
-
-      // 入力エリアへスクロール
-      const sectionRect = section.getBoundingClientRect();
-      const y = sectionRect.top + window.scrollY - 60;
+      const section = document.getElementById("inputSection");
+      const y = section.getBoundingClientRect().top + window.scrollY - 60;
       window.scrollTo({ top: y, behavior: 'smooth' });
       triggerHaptic('selection');
-    };
+    }
 
-    // ===== 行フォーム収集 =====
     function collectRowForm() {
       const pkg = document.getElementById("pkgInput").value.trim();
       const noFrom = document.getElementById("noFromInput").value;
@@ -338,23 +606,22 @@
       const W = document.getElementById("widInput").value;
       const H = document.getElementById("heiInput").value;
       const weight = document.getElementById("weightInput").value;
-
+      
       if (!pkg && !noFrom && !noTo && !qty && !L && !W && !H && !weight) return null;
-
+      
       return {
         packageType: pkg,
-        noFrom: noFrom !== "" ? Number(noFrom) : null,
-        noTo: noTo !== "" ? Number(noTo) : null,
-        qty: qty !== "" ? Number(qty) : null,
-        L: L !== "" ? Number(L) : null,
-        W: W !== "" ? Number(W) : null,
-        H: H !== "" ? Number(H) : null,
-        weightKg: weight !== "" ? Number(weight) : null,
+        noFrom: noFrom!==""?Number(noFrom):null,
+        noTo: noTo!==""?Number(noTo):null,
+        qty: qty!==""?Number(qty):null,
+        L: L!==""?Number(L):null,
+        W: W!==""?Number(W):null,
+        H: H!==""?Number(H):null,
+        weightKg: weight!==""?Number(weight):null,
         m3: calcM3(qty, L, W, H)
       };
     }
 
-    // ===== 行リスト描画 =====
     function renderRowsList() {
       const container = document.getElementById("rowsList");
       container.innerHTML = "";
@@ -363,7 +630,7 @@
         return;
       }
 
-      for (let i = 0; i < items.length; i++) {
+      for (let i = items.length - 1; i >= 0; i--) {
         const it = items[i];
         const originalIndex = i;
         const totalW = (Number(it.qty) || 0) * (Number(it.weightKg) || 0);
@@ -371,15 +638,10 @@
         const card = document.createElement("div");
         card.className = "card-item";
 
-        // 編集中行のハイライト
-        if (originalIndex === currentIndex) {
-          card.classList.add("card-editing");
-        }
-
         card.innerHTML = `
           <div class="card-header">
-            <span style="color:#38bdf8; font-weight:bold;">#${originalIndex + 1}</span>
-            <span style="font-size:14px; margin-left:8px; color:#cbd5e1;">${it.packageType || "-"}</span>
+            <span style="color:var(--accent); font-weight:bold;">#${originalIndex+1}</span>
+            <span style="font-size:14px; margin-left:8px; color:#cbd5e1;">${it.packageType||"-"}</span>
           </div>
           <div class="card-grid">
             <div>
@@ -406,7 +668,7 @@
             </div>
             <div>
               <div class="input-label">M3</div>
-              <div class="card-val" style="color:#38bdf8;">
+              <div class="card-val" style="color:var(--accent);">
                 ${(it.m3 ?? 0).toFixed(3)}
               </div>
             </div>
@@ -423,41 +685,40 @@
       }
     }
 
-    // ===== 初期化 =====
     window.addEventListener("DOMContentLoaded", () => {
       document.getElementById("dateInput").value = todayString();
       updateHeaderStatus();
+      updateFooterForEdit(false);
+      setEditingVisual(false);
+      renderMarkImages(markImages);  // 初期表示（「まだ写真がありません」）
 
-      // 入力イベント → 未保存状態＆M3計算
       document.querySelectorAll("input, textarea").forEach(el => {
         el.addEventListener("input", () => {
           markDirty();
-          if (["qtyInput", "lenInput", "widInput", "heiInput"].includes(el.id)) {
-            const q = document.getElementById("qtyInput").value;
-            const l = document.getElementById("lenInput").value;
-            const w = document.getElementById("widInput").value;
-            const h = document.getElementById("heiInput").value;
-            document.getElementById("m3Display").textContent = calcM3(q, l, w, h).toFixed(3);
+          if (["qtyInput","lenInput","widInput","heiInput"].includes(el.id)) {
+            const q=document.getElementById("qtyInput").value;
+            const l=document.getElementById("lenInput").value;
+            const w=document.getElementById("widInput").value;
+            const h=document.getElementById("heiInput").value;
+            document.getElementById("m3Display").textContent = calcM3(q,l,w,h).toFixed(3);
           }
         });
       });
 
-      // No. → 個数自動
       const calcQ = () => {
         const f = parseInt(document.getElementById("noFromInput").value);
         const t = parseInt(document.getElementById("noToInput").value);
         const qEl = document.getElementById("qtyInput");
-        if (!isNaN(f) && !isNaN(t) && t >= f) qEl.value = t - f + 1;
-        else if (!isNaN(f) || !isNaN(t)) qEl.value = 1;
+        if(!isNaN(f) && !isNaN(t) && t >= f) qEl.value = t - f + 1;
+        else if(!isNaN(f) || !isNaN(t)) qEl.value = 1;
         qEl.dispatchEvent(new Event('input'));
       };
       document.getElementById("noFromInput").addEventListener("input", calcQ);
       document.getElementById("noToInput").addEventListener("input", calcQ);
 
-      // 読込ボタン
       document.getElementById("loadBtn").addEventListener("click", async () => {
         const id = document.getElementById("hainyuId").value.trim();
-        if (!id) return showToast("番号を入力してください", "warn");
+        if(!id) return showToast("番号を入力してください", "warn");
         showToast("読込中...");
         try {
           const r = await apiLoadRecord(id);
@@ -467,7 +728,7 @@
           const itemNameInput = document.getElementById("itemNameInput");
           const markInput = document.getElementById("markInput");
 
-          if (r) {
+          if(r) {
             items = r.items || [];
             const h = r.header || {};
             dateInput.value = h.date || todayString();
@@ -475,35 +736,45 @@
             destInput.value = h.dest || "";
             itemNameInput.value = h.itemName || "";
             markInput.value = h.mark || "";
+
+            // ★ ここを修正：APIは header.markImage で1つ返してくる
+            if (h.markImage) {
+              // app.py では "mark_images/xxx.jpg" を返しているので /static を付ける
+              markImages = [`/static/${h.markImage}`];
+            } else {
+              markImages = [];
+            }
+            renderMarkImages(markImages);
+
             showToast("読込完了");
           } else {
-            // 新規として開始
             items = [];
             dateInput.value = todayString();
             shipperInput.value = "";
             destInput.value = "";
             itemNameInput.value = "";
             markInput.value = "";
+            markImages = [];
+            renderMarkImages(markImages);
             showToast("新規として開始します");
           }
           currentHainyuId = id;
           isDirty = false;
-          clearRowForm();
           updateHeaderStatus();
           renderRowsList();
+          clearRowForm();
           triggerHaptic('success');
-        } catch (e) {
+        } catch(e) {
           console.error(e);
           showToast("エラーが発生しました", "warn");
         }
       });
 
-      // 追加／更新
       document.getElementById("stickyAddBtn").addEventListener("click", () => {
         const row = collectRowForm();
-        if (!row) return showToast("値を入力してください", "warn");
+        if(!row) return showToast("値を入力してください", "warn");
 
-        if (currentIndex === null) {
+        if(currentIndex === null) {
           items.push(row);
           showToast("追加しました");
         } else {
@@ -514,20 +785,17 @@
         markDirty();
         renderRowsList();
         clearRowForm();
-
         window.scrollTo({ top: document.getElementById("inputSection").offsetTop - 60, behavior: 'smooth' });
       });
 
-      // クリア
       document.getElementById("stickyClearBtn").addEventListener("click", () => {
         clearRowForm();
         triggerHaptic('selection');
       });
 
-      // 保存
       document.getElementById("stickySaveBtn").addEventListener("click", async () => {
         const id = document.getElementById("hainyuId").value.trim();
-        if (!id) return;
+        if(!id) return;
         const header = {
           date: document.getElementById("dateInput").value,
           shipper: document.getElementById("shipperInput").value.trim(),
@@ -537,127 +805,152 @@
         };
         showToast("保存中...");
         try {
-          await apiSaveRecord(id, { header, items });
+          await apiSaveRecord(id, {header, items});
           isDirty = false;
+          currentHainyuId = id;
           updateHeaderStatus();
           showToast("保存しました！");
           triggerHaptic('success');
-        } catch (e) {
+        } catch(e) {
           console.error(e);
           showToast("保存失敗", "warn");
         }
       });
 
-      // 未保存で離脱しようとしたら警告
       window.addEventListener("beforeunload", (e) => {
         if (!isDirty) return;
         e.preventDefault();
         e.returnValue = "";
       });
 
-      // OCR初期化
       setupOcr();
     });
 
-    // ===== OCR（トリミング → Tesseract） =====
+    // OCR + 撮った画像を即サーバ保存 & プレビュー
     function setupOcr() {
       const fileIn = document.getElementById("markOcrFile");
       const canvas = document.getElementById("cropCanvas");
       const ctx = canvas.getContext("2d");
-      let imgObj = null, startX, startY, curX, curY, isDrag = false, cropRect = null;
+      let imgObj=null, startX, startY, curX, curY, isDrag=false, cropRect=null;
 
       document.getElementById("markOcrBtn").addEventListener("click", () => fileIn.click());
 
-      fileIn.addEventListener("change", e => {
-        if (!e.target.files[0]) return;
+      fileIn.addEventListener("change", async e => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        // 先にサーバーへアップロードしてURL取得→即プレビュー
+        const idInput = document.getElementById("hainyuId");
+        const inputId = idInput ? idInput.value.trim() : "";
+        const id = currentHainyuId || inputId;
+
+        if (!id) {
+          showToast("先に搬入番号を入力して読込してください", "warn");
+        } else {
+          try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await fetch(`/api/hainyu/${encodeURIComponent(id)}/mark_image`, {
+              method: "POST",
+              body: formData
+            });
+
+            if (!res.ok) {
+              console.error("upload failed", res.status);
+              showToast("画像の保存に失敗しました（OCRは続行します）", "warn");
+            } else {
+              const data = await res.json();
+              // ★ ここを修正：app.py 側は imageUrl（キャメルケース）で返す
+              if (data.imageUrl) {
+                markImages.push(data.imageUrl);
+                renderMarkImages(markImages); // 撮った瞬間に反映
+              }
+            }
+          } catch (err) {
+            console.error(err);
+            showToast("画像の保存中にエラー（OCRは続行します）", "warn");
+          }
+        }
+
         const r = new FileReader();
         r.onload = ev => {
           imgObj = new Image();
           imgObj.onload = () => {
             document.getElementById("cropOverlay").style.display = "flex";
-            const maxW = window.innerWidth - 40;
+            const maxW = window.innerWidth - 40; 
             const scale = maxW / imgObj.width;
-            canvas.width = maxW;
+            canvas.width = maxW; 
             canvas.height = imgObj.height * scale;
             ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
-            cropRect = null;
+            cropRect=null;
           };
           imgObj.src = ev.target.result;
         };
-        r.readAsDataURL(e.target.files[0]);
-        fileIn.value = "";
+        r.readAsDataURL(file);
+        fileIn.value="";
       });
 
-      // タッチで範囲指定
       canvas.addEventListener("touchstart", e => {
         e.preventDefault();
-        const r = canvas.getBoundingClientRect();
-        startX = e.touches[0].clientX - r.left;
-        startY = e.touches[0].clientY - r.top;
-        isDrag = true;
+        const r=canvas.getBoundingClientRect();
+        startX=e.touches[0].clientX-r.left;
+        startY=e.touches[0].clientY-r.top;
+        isDrag=true;
       });
-
       canvas.addEventListener("touchmove", e => {
-        if (!isDrag) return;
-        const r = canvas.getBoundingClientRect();
-        curX = e.touches[0].clientX - r.left;
-        curY = e.touches[0].clientY - r.top;
-        ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
-        const w = curX - startX, h = curY - startY;
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(startX, startY, w, h);
-        ctx.fillStyle = "rgba(56,189,248,0.3)";
-        ctx.fillRect(startX, startY, w, h);
+        if(!isDrag) return;
+        const r=canvas.getBoundingClientRect();
+        curX=e.touches[0].clientX-r.left;
+        curY=e.touches[0].clientY-r.top;
+        ctx.drawImage(imgObj,0,0,canvas.width,canvas.height);
+        const w=curX-startX, h=curY-startY;
+        ctx.strokeStyle="#38bdf8";
+        ctx.lineWidth=2;
+        ctx.strokeRect(startX,startY,w,h);
+        ctx.fillStyle="rgba(56,189,248,0.3)";
+        ctx.fillRect(startX,startY,w,h);
       });
-
       canvas.addEventListener("touchend", () => {
-        isDrag = false;
-        const w = curX - startX, h = curY - startY;
-        if (Math.abs(w) > 10 && Math.abs(h) > 10) cropRect = { x: startX, y: startY, w, h };
+        isDrag=false;
+        const w=curX-startX, h=curY-startY;
+        if(Math.abs(w)>10 && Math.abs(h)>10) cropRect={x:startX,y:startY,w,h};
       });
 
       document.getElementById("cropCancelBtn").addEventListener("click", () => {
-        document.getElementById("cropOverlay").style.display = "none";
+        document.getElementById("cropOverlay").style.display="none";
       });
-
       document.getElementById("cropOkBtn").addEventListener("click", async () => {
-        if (!cropRect) return showToast("範囲選択してください", "warn");
-        document.getElementById("cropOverlay").style.display = "none";
+        if(!cropRect) return showToast("範囲選択してください", "warn");
+        document.getElementById("cropOverlay").style.display="none";
         showToast("解析中...");
-
+        
         const scale = imgObj.width / canvas.width;
         const hc = document.createElement("canvas");
-        hc.width = Math.abs(cropRect.w * scale);
-        hc.height = Math.abs(cropRect.h * scale);
+        hc.width = Math.abs(cropRect.w*scale);
+        hc.height = Math.abs(cropRect.h*scale);
         const hctx = hc.getContext("2d");
         hctx.drawImage(
-          imgObj,
-          Math.min(cropRect.x, cropRect.x + cropRect.w) * scale,
-          Math.min(cropRect.y, cropRect.y + cropRect.h) * scale,
-          hc.width,
-          hc.height,
-          0,
-          0,
-          hc.width,
-          hc.height
+          imgObj, 
+          Math.min(cropRect.x, cropRect.x+cropRect.w)*scale,
+          Math.min(cropRect.y, cropRect.y+cropRect.h)*scale, 
+          hc.width, hc.height,
+          0, 0, hc.width, hc.height
         );
-
+        
         try {
-          const res = await Tesseract.recognize(
-            hc,
-            'eng',
-            { tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./ " }
-          );
+          const res = await Tesseract.recognize(hc, 'eng', {
+            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./ "
+          });
           const txt = res.data.text.replace(/[^A-Z0-9\-\.\/ \n]/g, "").trim();
           const el = document.getElementById("markInput");
-          el.value = (el.value ? el.value + "\n" : "") + txt;
+          el.value = (el.value ? el.value+"\n" : "") + txt;
           markDirty();
           showToast("完了");
           triggerHaptic('success');
-        } catch (e) {
+        } catch(e) { 
           console.error(e);
-          showToast("解析エラー", "warn");
+          showToast("解析エラー", "warn"); 
         }
       });
     }

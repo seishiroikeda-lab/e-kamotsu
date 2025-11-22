@@ -81,6 +81,27 @@
           <label for="markInput">マーク（荷印）</label>
           <textarea id="markInput" placeholder="例：&#10;ABC / TOKYO&#10;LOT NO.1234&#10;MADE IN JAPAN"></textarea>
         </div>
+
+        <!-- ★ 追加: OCR元画像プレビュー -->
+        <div class="field" style="margin-top:8px;">
+          <label>マーク画像（OCR元写真）</label>
+          <div id="markImageBox" style="
+              border: 1px solid #ddd;
+              border-radius: 6px;
+              padding: 8px;
+              min-height: 60px;
+              display: flex;
+              align-items: center;
+              justify-content: flex-start;
+              background: #f9fafb;
+              gap: 12px;
+            ">
+            <span id="markImageEmptyText" style="font-size:12px; color:#6b7280;">
+              まだ画像が登録されていません。（スマホ現場入力のOCRボタンで撮影するとここに表示されます）
+            </span>
+          </div>
+        </div>
+        <!-- ★ ここまで追加 -->
       </div>
 
       <!-- 明細 -->
@@ -426,9 +447,54 @@
         dest: destInput.value.trim() || "",
         itemName: itemNameInput.value.trim() || "",
         mark: markInput.value,
+        // markImage はサーバ側で維持しているのでここでは触らない
       };
 
       return { header, items };
+    }
+
+    // ★ 追加: マーク画像プレビュー更新関数
+    function updateMarkImagePreview(markImagePath) {
+      const box = document.getElementById("markImageBox");
+      const emptyText = document.getElementById("markImageEmptyText");
+      if (!box) return;
+
+      // いったん初期表示に戻す
+      box.innerHTML = "";
+      if (!markImagePath) {
+        box.appendChild(emptyText || document.createTextNode(
+          "まだ画像が登録されていません。（スマホ現場入力のOCRボタンで撮影するとここに表示されます）"
+        ));
+        return;
+      }
+
+      const url = `/static/${markImagePath}`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.title = "クリックで元画像を新しいタブで表示";
+
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = "マーク画像";
+      img.style.maxWidth = "160px";
+      img.style.maxHeight = "120px";
+      img.style.objectFit = "contain";
+      img.style.border = "1px solid #d1d5db";
+      img.style.background = "#fff";
+      img.style.borderRadius = "4px";
+      img.loading = "lazy";
+
+      a.appendChild(img);
+
+      const caption = document.createElement("div");
+      caption.textContent = "クリックで拡大表示（別タブ）";
+      caption.style.fontSize = "11px";
+      caption.style.color = "#6b7280";
+      caption.style.marginLeft = "8px";
+
+      box.appendChild(a);
+      box.appendChild(caption);
     }
 
     function renderHeader(header) {
@@ -444,12 +510,15 @@
         destInput.value = header.dest || "";
         itemNameInput.value = header.itemName || "";
         markInput.value = header.mark || "";
+        // ★ 追加: DBから渡される markImage を反映
+        updateMarkImagePreview(header.markImage || null);
       } else {
         dateInput.value = todayString();
         shipperInput.value = "";
         destInput.value = "";
         itemNameInput.value = "";
         markInput.value = "";
+        updateMarkImagePreview(null);
       }
     }
 
