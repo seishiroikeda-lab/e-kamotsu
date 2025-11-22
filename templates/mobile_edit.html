@@ -13,7 +13,7 @@
       --bg-body: #0f172a;
       --bg-card: #1e293b;
       --bg-input: #334155;
-      --bg-focus: #172554;
+      --bg-focus: #172554; /* 入力中の背景 */
       --accent: #38bdf8;
       --text-main: #f1f5f9;
       --text-sub: #94a3b8;
@@ -236,7 +236,7 @@
     .status-ok { background: #22c55e; color: #fff; }
     .status-warn { background: #f59e0b; color: #000; }
 
-    /* マーク写真表示 */
+    /* マーク写真一覧 */
     .mark-images-section {
       margin-top: 10px;
     }
@@ -325,7 +325,7 @@
         <textarea id="markInput" class="mobile-input" style="min-height:60px; font-family:monospace; font-size:14px;"></textarea>
       </div>
 
-      <!-- マーク写真（常に枠は表示・1枚だけ） -->
+      <!-- マーク写真一覧（常に枠は表示） -->
       <div id="markImagesSection" class="mark-images-section">
         <span class="input-label">マーク写真</span>
         <div id="markImagesList" class="mark-images-scroll">
@@ -445,7 +445,7 @@
     let isDirty = false;
     let items = [];
     let currentIndex = null;
-    let markImageUrl = null;  // この搬入番号のマーク写真1枚ぶん
+    let markImages = [];  // マーク写真URL配列
 
     function todayString() {
       const d = new Date();
@@ -511,13 +511,13 @@
       }
     }
 
-    // マーク写真の描画（1枚 or 「まだ写真がありません」）
-    function renderMarkImage() {
+    // マーク写真描画（常に枠あり）
+    function renderMarkImages(list) {
       const wrap = document.getElementById("markImagesList");
       if (!wrap) return;
 
       wrap.innerHTML = "";
-      if (!markImageUrl) {
+      if (!list || list.length === 0) {
         const empty = document.createElement("div");
         empty.className = "mark-images-empty";
         empty.textContent = "まだ写真がありません";
@@ -525,11 +525,13 @@
         return;
       }
 
-      const img = document.createElement("img");
-      img.src = markImageUrl;
-      img.alt = "マーク写真";
-      img.className = "mark-thumb";
-      wrap.appendChild(img);
+      list.forEach((url, idx) => {
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = "マーク写真" + (idx + 1);
+        img.className = "mark-thumb";
+        wrap.appendChild(img);
+      });
     }
 
     async function apiLoadRecord(id) {
@@ -538,7 +540,6 @@
       if (!res.ok) throw new Error("load failed");
       return await res.json();
     }
-
     async function apiSaveRecord(id, record) {
       const res = await fetch(`/api/hainyu/${encodeURIComponent(id)}`, {
         method: "POST",
@@ -689,8 +690,9 @@
       updateHeaderStatus();
       updateFooterForEdit(false);
       setEditingVisual(false);
-      renderMarkImage();  // 「まだ写真がありません」を出す
+      renderMarkImages(markImages);  // 初期表示
 
+      // 入力イベント
       document.querySelectorAll("input, textarea").forEach(el => {
         el.addEventListener("input", () => {
           markDirty();
@@ -704,6 +706,7 @@
         });
       });
 
+      // No.から個数自動計算
       const calcQ = () => {
         const f = parseInt(document.getElementById("noFromInput").value);
         const t = parseInt(document.getElementById("noToInput").value);
@@ -715,6 +718,7 @@
       document.getElementById("noFromInput").addEventListener("input", calcQ);
       document.getElementById("noToInput").addEventListener("input", calcQ);
 
+      // 読込
       document.getElementById("loadBtn").addEventListener("click", async () => {
         const id = document.getElementById("hainyuId").value.trim();
         if(!id) return showToast("番号を入力してください", "warn");
@@ -736,12 +740,15 @@
             itemNameInput.value = h.itemName || "";
             markInput.value = h.mark || "";
 
+            // ★ markImage があれば1枚だけ表示
+            markImages = [];
             if (h.markImage) {
-              markImageUrl = "/static/" + h.markImage;
-            } else {
-              markImageUrl = null;
+              const url = h.markImage.startsWith("/static/")
+                ? h.markImage
+                : "/static/" + h.markImage;
+              markImages.push(url);
             }
-            renderMarkImage();
+            renderMarkImages(markImages);
 
             showToast("読込完了");
           } else {
@@ -751,8 +758,8 @@
             destInput.value = "";
             itemNameInput.value = "";
             markInput.value = "";
-            markImageUrl = null;
-            renderMarkImage();
+            markImages = [];
+            renderMarkImages(markImages);
             showToast("新規として開始します");
           }
           currentHainyuId = id;
@@ -767,6 +774,7 @@
         }
       });
 
+      // 追加 / 上書き
       document.getElementById("stickyAddBtn").addEventListener("click", () => {
         const row = collectRowForm();
         if(!row) return showToast("値を入力してください", "warn");
@@ -785,14 +793,34 @@
         window.scrollTo({ top: document.getElementById("inputSection").offsetTop - 60, behavior: 'smooth' });
       });
 
+      // クリア
       document.getElementById("stickyClearBtn").addEventListener("click", () => {
         clearRowForm();
         triggerHaptic('selection');
       });
 
+      // ★ 保存：明細入力中なら自動追加／上書きしてから保存
       document.getElementById("stickySaveBtn").addEventListener("click", async () => {
         const id = document.getElementById("hainyuId").value.trim();
-        if(!id) return;
+        if (!id) {
+          showToast("先に搬入番号を入れて読込してください", "warn");
+          return;
+        }
+
+        // 入力中の明細を自動反映
+        const pendingRow = collectRowForm();
+        if (pendingRow) {
+          if (currentIndex === null) {
+            items.push(pendingRow);
+            showToast("最後の明細を追加して保存します", "ok");
+          } else {
+            items[currentIndex] = pendingRow;
+            showToast("編集中の明細を上書きして保存します", "ok");
+          }
+          renderRowsList();
+          clearRowForm();
+        }
+
         const header = {
           date: document.getElementById("dateInput").value,
           shipper: document.getElementById("shipperInput").value.trim(),
@@ -800,20 +828,22 @@
           itemName: document.getElementById("itemNameInput").value.trim(),
           mark: document.getElementById("markInput").value
         };
+
         showToast("保存中...");
         try {
-          await apiSaveRecord(id, {header, items});
+          await apiSaveRecord(id, { header, items });
           isDirty = false;
           currentHainyuId = id;
           updateHeaderStatus();
           showToast("保存しました！", "ok");
           triggerHaptic('success');
-        } catch(e) {
+        } catch (e) {
           console.error(e);
           showToast("保存失敗", "warn");
         }
       });
 
+      // 未保存で離脱しようとしたら警告
       window.addEventListener("beforeunload", (e) => {
         if (!isDirty) return;
         e.preventDefault();
@@ -823,149 +853,135 @@
       setupOcr();
     });
 
-    // OCR + 撮った画像を「先にトリミング → その後アップロード＆プレビュー」にする
+    // OCR + 撮った画像を即サーバ保存 & プレビュー
     function setupOcr() {
       const fileIn = document.getElementById("markOcrFile");
       const canvas = document.getElementById("cropCanvas");
       const ctx = canvas.getContext("2d");
-      let imgObj = null;
-      let startX, startY, curX, curY, isDrag = false, cropRect = null;
-
-      // 直近に撮ったファイルを保持
-      let lastCapturedFile = null;
+      let imgObj=null, startX, startY, curX, curY, isDrag=false, cropRect=null;
 
       document.getElementById("markOcrBtn").addEventListener("click", () => fileIn.click());
 
-      // ここでは「アップロードしない」。トリミング用の画像読み込みだけ。
-      fileIn.addEventListener("change", e => {
+      fileIn.addEventListener("change", async e => {
         const file = e.target.files[0];
         if (!file) return;
 
-        lastCapturedFile = file;
+        const idInput = document.getElementById("hainyuId");
+        const inputId = idInput ? idInput.value.trim() : "";
+        const id = currentHainyuId || inputId;
+
+        if (!id) {
+          showToast("先に搬入番号を入力して読込してください", "warn");
+        } else {
+          try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const res = await fetch(`/api/hainyu/${encodeURIComponent(id)}/mark_image`, {
+              method: "POST",
+              body: formData
+            });
+
+            if (!res.ok) {
+              console.error("upload failed", res.status);
+              showToast("画像の保存に失敗しました（OCRは続行します）", "warn");
+            } else {
+              const data = await res.json();
+              let url = null;
+              if (data.imageUrl) {
+                url = data.imageUrl;
+              } else if (data.imagePath) {
+                url = "/static/" + data.imagePath;
+              }
+              if (url) {
+                markImages.push(url);
+                renderMarkImages(markImages); // 撮った瞬間に反映
+              }
+            }
+          } catch (err) {
+            console.error(err);
+            showToast("画像の保存中にエラー（OCRは続行します）", "warn");
+          }
+        }
 
         const r = new FileReader();
         r.onload = ev => {
           imgObj = new Image();
           imgObj.onload = () => {
             document.getElementById("cropOverlay").style.display = "flex";
-            const maxW = window.innerWidth - 40;
+            const maxW = window.innerWidth - 40; 
             const scale = maxW / imgObj.width;
-            canvas.width = maxW;
+            canvas.width = maxW; 
             canvas.height = imgObj.height * scale;
             ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
-            cropRect = null;
+            cropRect=null;
           };
           imgObj.src = ev.target.result;
         };
         r.readAsDataURL(file);
-        fileIn.value = "";
+        fileIn.value="";
       });
 
       canvas.addEventListener("touchstart", e => {
         e.preventDefault();
-        const r = canvas.getBoundingClientRect();
-        startX = e.touches[0].clientX - r.left;
-        startY = e.touches[0].clientY - r.top;
-        isDrag = true;
+        const r=canvas.getBoundingClientRect();
+        startX=e.touches[0].clientX-r.left;
+        startY=e.touches[0].clientY-r.top;
+        isDrag=true;
       });
-
       canvas.addEventListener("touchmove", e => {
-        if (!isDrag) return;
-        const r = canvas.getBoundingClientRect();
-        curX = e.touches[0].clientX - r.left;
-        curY = e.touches[0].clientY - r.top;
-        ctx.drawImage(imgObj, 0, 0, canvas.width, canvas.height);
-        const w = curX - startX, h = curY - startY;
-        ctx.strokeStyle = "#38bdf8";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(startX, startY, w, h);
-        ctx.fillStyle = "rgba(56,189,248,0.3)";
-        ctx.fillRect(startX, startY, w, h);
+        if(!isDrag) return;
+        const r=canvas.getBoundingClientRect();
+        curX=e.touches[0].clientX-r.left;
+        curY=e.touches[0].clientY-r.top;
+        ctx.drawImage(imgObj,0,0,canvas.width,canvas.height);
+        const w=curX-startX, h=curY-startY;
+        ctx.strokeStyle="#38bdf8";
+        ctx.lineWidth=2;
+        ctx.strokeRect(startX,startY,w,h);
+        ctx.fillStyle="rgba(56,189,248,0.3)";
+        ctx.fillRect(startX,startY,w,h);
       });
-
       canvas.addEventListener("touchend", () => {
-        isDrag = false;
-        const w = curX - startX, h = curY - startY;
-        if (Math.abs(w) > 10 && Math.abs(h) > 10) {
-          cropRect = { x: startX, y: startY, w, h };
-        }
+        isDrag=false;
+        const w=curX-startX, h=curY-startY;
+        if(Math.abs(w)>10 && Math.abs(h)>10) cropRect={x:startX,y:startY,w,h};
       });
 
       document.getElementById("cropCancelBtn").addEventListener("click", () => {
-        document.getElementById("cropOverlay").style.display = "none";
+        document.getElementById("cropOverlay").style.display="none";
       });
-
       document.getElementById("cropOkBtn").addEventListener("click", async () => {
-        if (!cropRect) return showToast("範囲選択してください", "warn");
-
-        document.getElementById("cropOverlay").style.display = "none";
+        if(!cropRect) return showToast("範囲選択してください", "warn");
+        document.getElementById("cropOverlay").style.display="none";
         showToast("解析中...");
-
-        // まずはトリミングして OCR
+        
         const scale = imgObj.width / canvas.width;
         const hc = document.createElement("canvas");
-        hc.width = Math.abs(cropRect.w * scale);
-        hc.height = Math.abs(cropRect.h * scale);
+        hc.width = Math.abs(cropRect.w*scale);
+        hc.height = Math.abs(cropRect.h*scale);
         const hctx = hc.getContext("2d");
         hctx.drawImage(
-          imgObj,
-          Math.min(cropRect.x, cropRect.x + cropRect.w) * scale,
-          Math.min(cropRect.y, cropRect.y + cropRect.h) * scale,
+          imgObj, 
+          Math.min(cropRect.x, cropRect.x+cropRect.w)*scale,
+          Math.min(cropRect.y, cropRect.y+cropRect.h)*scale, 
           hc.width, hc.height,
           0, 0, hc.width, hc.height
         );
-
+        
         try {
           const res = await Tesseract.recognize(hc, 'eng', {
             tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./ "
           });
           const txt = res.data.text.replace(/[^A-Z0-9\-\.\/ \n]/g, "").trim();
           const el = document.getElementById("markInput");
-          el.value = (el.value ? el.value + "\n" : "") + txt;
+          el.value = (el.value ? el.value+"\n" : "") + txt;
           markDirty();
-        } catch (e) {
-          console.error(e);
-          showToast("解析エラー", "warn");
-          return;
-        }
-
-        // OCR後に画像を保存＆プレビュー反映
-        const idInput = document.getElementById("hainyuId");
-        const inputId = idInput ? idInput.value.trim() : "";
-        const id = currentHainyuId || inputId;
-
-        if (!id || !lastCapturedFile) {
-          showToast("解析完了（番号未入力のため画像保存なし）", "ok");
+          showToast("完了");
           triggerHaptic('success');
-          return;
-        }
-
-        showToast("画像保存中...");
-
-        try {
-          const formData = new FormData();
-          formData.append("file", lastCapturedFile);
-
-          const uploadRes = await fetch(`/api/hainyu/${encodeURIComponent(id)}/mark_image`, {
-            method: "POST",
-            body: formData
-          });
-
-          if (!uploadRes.ok) {
-            console.error("upload failed", uploadRes.status);
-            showToast("テキストは取り込みましたが、画像保存に失敗しました", "warn");
-          } else {
-            const data = await uploadRes.json();
-            if (data.imageUrl) {
-              markImageUrl = data.imageUrl;
-              renderMarkImage();  // 元画面で即反映
-            }
-            showToast("完了", "ok");
-            triggerHaptic('success');
-          }
-        } catch (err) {
-          console.error(err);
-          showToast("画像保存中にエラー（文字は取り込めています）", "warn");
+        } catch(e) { 
+          console.error(e);
+          showToast("解析エラー", "warn"); 
         }
       });
     }
