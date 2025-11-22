@@ -740,7 +740,7 @@
             itemNameInput.value = h.itemName || "";
             markInput.value = h.mark || "";
 
-            // ★ markImage があれば1枚だけ表示
+            // markImage があれば1枚だけ表示
             markImages = [];
             if (h.markImage) {
               const url = h.markImage.startsWith("/static/")
@@ -799,7 +799,7 @@
         triggerHaptic('selection');
       });
 
-      // ★ 保存：明細入力中なら自動追加／上書きしてから保存
+      // 保存：明細入力中なら自動追加／上書きしてから保存
       document.getElementById("stickySaveBtn").addEventListener("click", async () => {
         const id = document.getElementById("hainyuId").value.trim();
         if (!id) {
@@ -853,7 +853,7 @@
       setupOcr();
     });
 
-    // OCR + 撮った画像を即サーバ保存 & プレビュー
+    // ====== OCR + トリミング → OCR → アップロード → 反映 ======
     function setupOcr() {
       const fileIn = document.getElementById("markOcrFile");
       const canvas = document.getElementById("cropCanvas");
@@ -862,47 +862,10 @@
 
       document.getElementById("markOcrBtn").addEventListener("click", () => fileIn.click());
 
-      fileIn.addEventListener("change", async e => {
+      // 撮影したらすぐトリミング画面へ（ここではアップロードしない）
+      fileIn.addEventListener("change", e => {
         const file = e.target.files[0];
         if (!file) return;
-
-        const idInput = document.getElementById("hainyuId");
-        const inputId = idInput ? idInput.value.trim() : "";
-        const id = currentHainyuId || inputId;
-
-        if (!id) {
-          showToast("先に搬入番号を入力して読込してください", "warn");
-        } else {
-          try {
-            const formData = new FormData();
-            formData.append("file", file);
-
-            const res = await fetch(`/api/hainyu/${encodeURIComponent(id)}/mark_image`, {
-              method: "POST",
-              body: formData
-            });
-
-            if (!res.ok) {
-              console.error("upload failed", res.status);
-              showToast("画像の保存に失敗しました（OCRは続行します）", "warn");
-            } else {
-              const data = await res.json();
-              let url = null;
-              if (data.imageUrl) {
-                url = data.imageUrl;
-              } else if (data.imagePath) {
-                url = "/static/" + data.imagePath;
-              }
-              if (url) {
-                markImages.push(url);
-                renderMarkImages(markImages); // 撮った瞬間に反映
-              }
-            }
-          } catch (err) {
-            console.error(err);
-            showToast("画像の保存中にエラー（OCRは続行します）", "warn");
-          }
-        }
 
         const r = new FileReader();
         r.onload = ev => {
@@ -951,11 +914,63 @@
       document.getElementById("cropCancelBtn").addEventListener("click", () => {
         document.getElementById("cropOverlay").style.display="none";
       });
+
+      // 切り出し画像をサーバーにアップロードして、サムネに反映
+      function uploadCroppedImage(hc) {
+        const idInput = document.getElementById("hainyuId");
+        const inputId = idInput ? idInput.value.trim() : "";
+        const id = currentHainyuId || inputId;
+
+        if (!id) {
+          showToast("画像を保存するには先に搬入番号を入れて読込してください", "warn");
+          return;
+        }
+
+        showToast("画像保存中...", "ok");
+
+        hc.toBlob(async (blob) => {
+          if (!blob) return;
+          try {
+            const formData = new FormData();
+            formData.append("file", blob, "mark.jpg");
+
+            const res = await fetch(`/api/hainyu/${encodeURIComponent(id)}/mark_image`, {
+              method: "POST",
+              body: formData
+            });
+
+            if (!res.ok) {
+              console.error("upload failed", res.status);
+              showToast("画像の保存に失敗しました", "warn");
+              return;
+            }
+
+            const data = await res.json();
+            let url = null;
+            if (data.imageUrl) {
+              url = data.imageUrl;
+            } else if (data.imagePath) {
+              url = "/static/" + data.imagePath;
+            }
+
+            if (url) {
+              markImages.push(url);
+              renderMarkImages(markImages); // OCR後に反映
+            }
+            showToast("画像を保存しました", "ok");
+          } catch (err) {
+            console.error(err);
+            showToast("画像の保存中にエラー", "warn");
+          }
+        }, "image/jpeg", 0.9);
+      }
+
       document.getElementById("cropOkBtn").addEventListener("click", async () => {
         if(!cropRect) return showToast("範囲選択してください", "warn");
         document.getElementById("cropOverlay").style.display="none";
         showToast("解析中...");
-        
+
+        // トリミングした領域を別キャンバスに切り出し
         const scale = imgObj.width / canvas.width;
         const hc = document.createElement("canvas");
         hc.width = Math.abs(cropRect.w*scale);
@@ -969,6 +984,7 @@
           0, 0, hc.width, hc.height
         );
         
+        // 先にOCR
         try {
           const res = await Tesseract.recognize(hc, 'eng', {
             tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./ "
@@ -977,12 +993,15 @@
           const el = document.getElementById("markInput");
           el.value = (el.value ? el.value+"\n" : "") + txt;
           markDirty();
-          showToast("完了");
+          showToast("OCR完了", "ok");
           triggerHaptic('success');
         } catch(e) { 
           console.error(e);
-          showToast("解析エラー", "warn"); 
+          showToast("解析エラー（画像は保存します）", "warn"); 
         }
+
+        // OCRのあとでサーバーにアップロード → 元画面にサムネ反映
+        uploadCroppedImage(hc);
       });
     }
   </script>
